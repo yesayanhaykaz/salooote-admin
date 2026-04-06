@@ -1,13 +1,12 @@
 "use client";
 import { useState } from "react";
-import { Save, Globe, Lock, Bell, CreditCard, Eye, EyeOff } from "lucide-react";
+import { Save, Globe, Lock, Bell, Eye, EyeOff } from "lucide-react";
 import TopBar from "@/components/TopBar";
 
 const TABS = [
-  { key: "general",       label: "General",       icon: Globe       },
-  { key: "security",      label: "Security",       icon: Lock        },
-  { key: "notifications", label: "Notifications",  icon: Bell        },
-  { key: "billing",       label: "Billing",        icon: CreditCard  },
+  { key: "general",       label: "General",       icon: Globe },
+  { key: "security",      label: "Security",       icon: Lock  },
+  { key: "notifications", label: "Notifications",  icon: Bell  },
 ];
 
 function Field({ label, hint, children }) {
@@ -231,68 +230,6 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Billing Tab */}
-          {activeTab === "billing" && (
-            <div className="space-y-5">
-              {/* Current Plan */}
-              <div className="bg-white rounded-xl border border-surface-200 p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-sm font-bold text-surface-900">Current Plan</h2>
-                    <p className="text-xs text-surface-400 mt-0.5">Your active subscription</p>
-                  </div>
-                  <span className="badge badge-success">Active</span>
-                </div>
-                <div className="flex items-end gap-2 mb-3">
-                  <span className="text-3xl font-bold text-surface-900">$79</span>
-                  <span className="text-sm text-surface-400 mb-1">/month</span>
-                </div>
-                <p className="text-sm font-semibold text-primary-600">Pro Plan</p>
-                <p className="text-xs text-surface-400 mt-1">Renews on May 7, 2026</p>
-                <div className="mt-4 flex gap-3">
-                  <button className="px-4 py-2 rounded-xl bg-primary-600 text-sm font-semibold text-white hover:bg-primary-700 transition-colors cursor-pointer border-0">Upgrade Plan</button>
-                  <button className="px-4 py-2 rounded-xl border border-surface-200 text-sm font-semibold text-surface-600 hover:bg-surface-50 transition-colors cursor-pointer bg-white">Cancel Plan</button>
-                </div>
-              </div>
-
-              {/* Payment Method */}
-              <div className="bg-white rounded-xl border border-surface-200 p-6">
-                <h2 className="text-sm font-bold text-surface-900 mb-4">Payment Method</h2>
-                <div className="flex items-center gap-4 p-4 bg-surface-50 rounded-xl border border-surface-200">
-                  <div className="w-10 h-7 rounded bg-blue-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xs font-bold">VISA</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-surface-800">Visa ending in 4242</p>
-                    <p className="text-xs text-surface-400">Expires 12/27</p>
-                  </div>
-                  <button className="text-xs font-semibold text-primary-600 hover:underline cursor-pointer border-0 bg-transparent">Update</button>
-                </div>
-              </div>
-
-              {/* Billing History */}
-              <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-surface-100">
-                  <h2 className="text-sm font-bold text-surface-900">Billing History</h2>
-                </div>
-                <div className="divide-y divide-surface-50">
-                  {[
-                    { date: "Apr 7, 2026",  amount: "$79", status: "Paid" },
-                    { date: "Mar 7, 2026",  amount: "$79", status: "Paid" },
-                    { date: "Feb 7, 2026",  amount: "$79", status: "Paid" },
-                    { date: "Jan 7, 2026",  amount: "$79", status: "Paid" },
-                  ].map((invoice, i) => (
-                    <div key={i} className="flex items-center px-6 py-3.5 hover:bg-surface-50 transition-colors">
-                      <p className="text-sm text-surface-600 flex-1">Pro Plan — {invoice.date}</p>
-                      <span className="font-bold text-surface-900 mr-4">{invoice.amount}</span>
-                      <span className="badge badge-success mr-3">{invoice.status}</span>
-                      <button className="text-xs text-primary-600 font-semibold hover:underline cursor-pointer border-0 bg-transparent">Download</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

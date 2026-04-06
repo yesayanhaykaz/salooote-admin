@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { Camera, Save, Plus } from "lucide-react";
+import { useState, useRef } from "react";
+import { Camera, Save, Plus, Upload, X, ImageIcon } from "lucide-react";
 import TopBar from "@/components/TopBar";
 
 const TABS = ["Profile", "Store", "Notifications", "Payout"];
@@ -30,25 +30,129 @@ function SaveButton() {
   );
 }
 
+function UploadAvatarButton({ onFile }) {
+  const inputRef = useRef(null);
+  return (
+    <>
+      <button
+        onClick={() => inputRef.current?.click()}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-surface-200 rounded-lg text-surface-600 hover:bg-surface-50 cursor-pointer bg-white"
+      >
+        <Upload size={12} /> Upload Photo
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files[0] && onFile(e.target.files[0])} />
+    </>
+  );
+}
+
+function ImageUploadBox({ label, hint, aspectClass, image, onImage, shape = "square" }) {
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleFile = (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    onImage(URL.createObjectURL(file));
+  };
+
+  return (
+    <div>
+      {label && <label className="block text-xs font-semibold text-surface-700 mb-2">{label}</label>}
+      {hint && <p className="text-[11px] text-surface-400 mb-2">{hint}</p>}
+      {image ? (
+        <div className={`relative overflow-hidden border-2 border-surface-200 ${aspectClass} ${shape === "circle" ? "rounded-full" : "rounded-xl"}`}>
+          <img src={image} alt="" className="w-full h-full object-cover" />
+          <button
+            onClick={() => onImage(null)}
+            className="absolute top-2 right-2 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer border-0"
+          >
+            <X size={11} />
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+          className={`${aspectClass} border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-all ${shape === "circle" ? "rounded-full" : "rounded-xl"} ${
+            dragging ? "border-primary-400 bg-primary-50" : "border-surface-200 bg-surface-50 hover:border-primary-300 hover:bg-primary-50/30"
+          }`}
+        >
+          <ImageIcon size={20} className="text-surface-300" />
+          <p className="text-xs text-surface-400 text-center px-2">Click or drag to upload</p>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
+    </div>
+  );
+}
+
 function ProfileTab() {
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [businessLogo, setBusinessLogo] = useState(null);
+  const [coverImage, setCoverImage] = useState(null);
+
   return (
     <div className="space-y-6">
-      {/* Photo Upload */}
+      {/* Cover / Banner Image */}
       <div className="bg-white rounded-xl border border-surface-200 p-6">
-        <h3 className="text-sm font-semibold text-surface-900 mb-4">Profile Photo</h3>
-        <div className="flex items-center gap-5">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-primary-600 flex items-center justify-center">
-              <span className="text-white text-2xl font-bold">S</span>
-            </div>
-            <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-white border border-surface-200 rounded-full flex items-center justify-center hover:bg-surface-50 cursor-pointer">
-              <Camera size={13} className="text-surface-500" />
-            </button>
-          </div>
+        <h3 className="text-sm font-semibold text-surface-900 mb-1">Cover / Banner Image</h3>
+        <p className="text-xs text-surface-400 mb-4">Displayed at the top of your store page. Recommended: 1200×400px.</p>
+        <ImageUploadBox
+          aspectClass="w-full h-36"
+          image={coverImage}
+          onImage={setCoverImage}
+          shape="square"
+        />
+      </div>
+
+      {/* Logo & Profile Photo side by side */}
+      <div className="bg-white rounded-xl border border-surface-200 p-6">
+        <h3 className="text-sm font-semibold text-surface-900 mb-5">Brand Identity</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Business Logo */}
           <div>
-            <p className="text-sm font-medium text-surface-800 mb-1">Sweet Dreams Bakery</p>
-            <p className="text-xs text-surface-400 mb-2">JPG, PNG or GIF. Max 2MB.</p>
-            <button className="px-3 py-1.5 text-xs font-medium border border-surface-200 rounded-lg text-surface-600 hover:bg-surface-50 cursor-pointer bg-white">Upload Photo</button>
+            <label className="block text-xs font-semibold text-surface-700 mb-1">Business Logo</label>
+            <p className="text-[11px] text-surface-400 mb-3">Square image, min 200×200px. Shown in search results and receipts.</p>
+            {businessLogo ? (
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-surface-200">
+                <img src={businessLogo} alt="" className="w-full h-full object-cover" />
+                <button onClick={() => setBusinessLogo(null)} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer border-0">
+                  <X size={10} />
+                </button>
+              </div>
+            ) : (
+              <ImageUploadBox
+                aspectClass="w-24 h-24"
+                image={businessLogo}
+                onImage={setBusinessLogo}
+                shape="square"
+              />
+            )}
+          </div>
+
+          {/* Profile / Owner Photo */}
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1">Owner / Profile Photo</label>
+            <p className="text-[11px] text-surface-400 mb-3">Your personal photo shown on the vendor profile page.</p>
+            <div className="flex items-center gap-4">
+              {profilePhoto ? (
+                <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-surface-200 flex-shrink-0">
+                  <img src={profilePhoto} alt="" className="w-full h-full object-cover" />
+                  <button onClick={() => setProfilePhoto(null)} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer border-0">
+                    <X size={10} />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-2xl font-bold">S</span>
+                </div>
+              )}
+              <div>
+                <UploadAvatarButton onFile={(f) => setProfilePhoto(URL.createObjectURL(f))} />
+                <p className="text-[11px] text-surface-400 mt-1.5">JPG, PNG. Max 2MB.</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

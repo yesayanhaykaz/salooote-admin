@@ -4,13 +4,13 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Store, ShoppingBag, Calendar,
   Package, Tag, BarChart2, MessageSquare, FileText,
-  Settings, Sparkles, ChevronLeft, Bell, LogOut
+  Settings, Sparkles, CreditCard, ChevronLeft, Bell, LogOut
 } from "lucide-react";
 
 const ICONS = {
   LayoutDashboard, Users, Store, ShoppingBag, Calendar,
   Package, Tag, BarChart2, MessageSquare, FileText,
-  Settings, Sparkles,
+  Settings, Sparkles, CreditCard,
 };
 
 export default function Sidebar({ nav, role, userName = "Admin User", userEmail = "admin@salooote.am" }) {

@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { Camera, Save, Plus, Pencil, Trash2, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { useState, useRef } from "react";
+import { Camera, Save, Plus, Pencil, Trash2, Eye, EyeOff, AlertTriangle, Upload, X } from "lucide-react";
 import TopBar from "@/components/TopBar";
 
 function InputField({ label, type = "text", defaultValue = "", placeholder = "" }) {
@@ -22,7 +22,66 @@ const ADDRESSES = [
   { id: 2, label: "Work",   address: "45 Tigranyan St, Yerevan, Armenia", default: false },
 ];
 
+function AvatarUpload({ image, onImage }) {
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleFile = (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    onImage(URL.createObjectURL(file));
+  };
+
+  return (
+    <div className="flex items-center gap-5">
+      {/* Avatar preview */}
+      <div
+        className="relative flex-shrink-0 cursor-pointer group"
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+        onClick={() => inputRef.current?.click()}
+      >
+        <div className={`w-20 h-20 rounded-full overflow-hidden border-2 transition-all ${dragging ? "border-primary-400 scale-105" : "border-surface-200"}`}>
+          {image ? (
+            <img src={image} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-primary-600 flex items-center justify-center">
+              <span className="text-white text-xl font-bold">A</span>
+            </div>
+          )}
+        </div>
+        <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+          <Camera size={16} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+        {image && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onImage(null); }}
+            className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-surface-200 rounded-full flex items-center justify-center text-surface-500 hover:bg-red-50 hover:text-red-500 cursor-pointer"
+          >
+            <X size={10} />
+          </button>
+        )}
+      </div>
+
+      {/* Upload info */}
+      <div>
+        <p className="text-sm font-semibold text-surface-800 mb-0.5">Anna Hovhannisyan</p>
+        <p className="text-xs text-surface-400 mb-2">JPG, PNG or GIF. Max 2MB.</p>
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-surface-200 rounded-lg text-surface-600 hover:bg-surface-50 cursor-pointer bg-white"
+        >
+          <Upload size={12} /> Upload Photo
+        </button>
+      </div>
+
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
+    </div>
+  );
+}
+
 export default function UserSettings() {
+  const [avatarImage, setAvatarImage] = useState(null);
   const [showPass, setShowPass] = useState(false);
   const [notifications, setNotifications] = useState({
     orders: true, messages: true, events: true, promotions: false, newsletter: false,
@@ -45,20 +104,8 @@ export default function UserSettings() {
           <h2 className="text-sm font-bold text-surface-900 mb-5">Profile</h2>
 
           {/* Avatar */}
-          <div className="flex items-center gap-5 mb-6">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full bg-primary-600 flex items-center justify-center">
-                <span className="text-white text-xl font-bold">A</span>
-              </div>
-              <button className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border border-surface-200 rounded-full flex items-center justify-center hover:bg-surface-50 cursor-pointer">
-                <Camera size={11} className="text-surface-500" />
-              </button>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-surface-900">Anna Hovhannisyan</p>
-              <p className="text-xs text-surface-400 mt-0.5">anna@example.com</p>
-              <button className="mt-1.5 px-3 py-1 text-xs font-medium border border-surface-200 rounded-lg text-surface-600 hover:bg-surface-50 cursor-pointer bg-white">Change Photo</button>
-            </div>
+          <div className="mb-6">
+            <AvatarUpload image={avatarImage} onImage={setAvatarImage} />
           </div>
 
           {/* Fields */}

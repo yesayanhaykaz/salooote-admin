@@ -13,15 +13,16 @@ export const ADMIN_NAV = [
 ];
 
 export const VENDOR_NAV = [
-  { label: "Dashboard",    href: "/vendor",             icon: "LayoutDashboard" },
-  { label: "Customers",    href: "/vendor/customers",   icon: "Users" },
-  { label: "Orders",       href: "/vendor/orders",      icon: "ShoppingBag" },
-  { label: "Events",       href: "/vendor/events",      icon: "Calendar" },
-  { label: "Products",     href: "/vendor/products",    icon: "Package" },
-  { label: "Services",     href: "/vendor/services",    icon: "Sparkles" },
-  { label: "Sales Report", href: "/vendor/reports",     icon: "BarChart2" },
-  { label: "Messages",     href: "/vendor/messages",    icon: "MessageSquare" },
-  { label: "Settings",     href: "/vendor/settings",    icon: "Settings" },
+  { label: "Dashboard",    href: "/vendor",                  icon: "LayoutDashboard" },
+  { label: "Customers",    href: "/vendor/customers",        icon: "Users" },
+  { label: "Orders",       href: "/vendor/orders",           icon: "ShoppingBag" },
+  { label: "Events",       href: "/vendor/events",           icon: "Calendar" },
+  { label: "Products",     href: "/vendor/products",         icon: "Package" },
+  { label: "Services",     href: "/vendor/services",         icon: "Sparkles" },
+  { label: "Sales Report", href: "/vendor/reports",          icon: "BarChart2" },
+  { label: "Messages",     href: "/vendor/messages",         icon: "MessageSquare" },
+  { label: "Subscription", href: "/vendor/subscription",     icon: "CreditCard" },
+  { label: "Settings",     href: "/vendor/settings",         icon: "Settings" },
 ];
 
 export const USER_NAV = [
