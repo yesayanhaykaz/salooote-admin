@@ -1,2 +1,2 @@
 "use client";
-export { LocaleProvider } from "@/lib/i18n";
+export { LocaleProvider as default } from "@/lib/i18n";
