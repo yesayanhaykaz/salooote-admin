@@ -4,14 +4,17 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
 import { authAPI } from "@/lib/api";
 import { saveTokens, saveUser } from "@/lib/auth";
+import { useLocale, LANGUAGES } from "@/lib/i18n";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [show, setShow] = useState(false);
-  const [email, setEmail] = useState("admin@salooote.am");
+  const { t, locale, setLocale } = useLocale();
+
+  const [show, setShow]         = useState(false);
+  const [email, setEmail]       = useState("admin@salooote.am");
   const [password, setPassword] = useState("Admin@123");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,32 +37,40 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 flex">
-      {/* Left — image */}
+
+      {/* ── Left panel ── */}
       <div className="hidden lg:flex flex-1 relative overflow-hidden bg-primary-900">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-800 via-primary-700 to-violet-900" />
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px)",
-          backgroundSize: "32px 32px"
+          backgroundSize: "32px 32px",
         }} />
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
               <span className="text-white font-bold text-sm">S</span>
             </div>
-            <span className="text-white font-bold text-lg">Salooote</span>
+            <span className="text-white font-bold text-lg">{t("brand.name")}</span>
           </div>
+
+          {/* Hero copy */}
           <div>
             <h2 className="text-4xl font-bold text-white leading-tight mb-4">
-              Manage your<br />events platform
+              {t("hero.title")}
             </h2>
             <p className="text-white/60 text-base leading-relaxed max-w-[320px]">
-              Full control over vendors, orders, events, and customers — all in one place.
+              {t("hero.subtitle")}
             </p>
             <div className="flex gap-6 mt-10">
-              {[{ n: "850+", l: "Vendors" }, { n: "15K+", l: "Orders" }, { n: "4.9", l: "Rating" }].map((s, i) => (
-                <div key={i}>
+              {[
+                { n: "850+", key: "stats.vendors" },
+                { n: "15K+", key: "stats.orders" },
+                { n: "4.9",  key: "stats.rating" },
+              ].map(s => (
+                <div key={s.key}>
                   <p className="text-white font-bold text-xl">{s.n}</p>
-                  <p className="text-white/40 text-xs">{s.l}</p>
+                  <p className="text-white/40 text-xs">{t(s.key)}</p>
                 </div>
               ))}
             </div>
@@ -67,12 +78,30 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right — form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
+      {/* ── Right panel ── */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12 relative">
+
+        {/* Language switcher — top right */}
+        <div className="absolute top-6 right-6 flex gap-1">
+          {LANGUAGES.map(lang => (
+            <button
+              key={lang.code}
+              onClick={() => setLocale(lang.code)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                locale === lang.code
+                  ? "bg-primary-600 text-white border-primary-600"
+                  : "bg-white text-surface-500 border-surface-200 hover:border-primary-300 hover:text-primary-600"
+              }`}
+            >
+              {lang.flag} {lang.label}
+            </button>
+          ))}
+        </div>
+
         <div className="w-full max-w-[400px]">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-surface-900 mb-1">Welcome back</h1>
-            <p className="text-surface-400 text-sm">Sign in to your account</p>
+            <h1 className="text-2xl font-bold text-surface-900 mb-1">{t("auth.welcome")}</h1>
+            <p className="text-surface-400 text-sm">{t("auth.signin_title")}</p>
           </div>
 
           {error && (
@@ -84,7 +113,9 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Email</label>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                {t("auth.email")}
+              </label>
               <input
                 type="email"
                 value={email}
@@ -97,8 +128,12 @@ export default function LoginPage() {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-surface-700">Password</label>
-                <a href="#" className="text-xs text-primary-600 hover:text-primary-700 no-underline">Forgot password?</a>
+                <label className="text-xs font-semibold text-surface-700">
+                  {t("auth.password")}
+                </label>
+                <a href="#" className="text-xs text-primary-600 hover:text-primary-700 no-underline">
+                  {t("auth.forgot_password")}
+                </a>
               </div>
               <div className="relative">
                 <input
@@ -124,15 +159,19 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-primary-600 text-white border-none rounded-xl py-3 text-sm font-semibold cursor-pointer hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 mt-2"
             >
-              {loading ? "Signing in…" : <><span>Sign In</span><ArrowRight size={15} /></>}
+              {loading
+                ? "…"
+                : <><span>{t("auth.signin_button")}</span><ArrowRight size={15} /></>
+              }
             </button>
           </form>
 
+          {/* Demo credentials */}
           <div className="mt-5 px-4 py-3 rounded-xl bg-surface-50 border border-surface-200 text-xs text-surface-500">
-            <p className="font-semibold text-surface-700 mb-1">Demo credentials</p>
-            <p>Admin: admin@salooote.am / Admin@123</p>
-            <p>Vendor: vendor@salooote.am / Vendor@123</p>
-            <p>User: user@example.com / User@123</p>
+            <p className="font-semibold text-surface-700 mb-1">{t("demo.title")}</p>
+            <p>{t("demo.admin")}: admin@salooote.am / Admin@123</p>
+            <p>{t("demo.vendor")}: vendor@salooote.am / Vendor@123</p>
+            <p>{t("demo.user")}: user@example.com / User@123</p>
           </div>
         </div>
       </div>
