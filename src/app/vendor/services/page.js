@@ -10,6 +10,15 @@ import TopBar from "@/components/TopBar";
 import ImageManager from "@/components/ImageManager";
 import RichTextEditor from "@/components/RichTextEditor";
 import { vendorAPI, adminCategoriesAPI } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
+
+/* ─── locale-aware name helper ───────────────────────────────────────────── */
+function getLocName(item, locale) {
+  if (!item) return "";
+  if (locale === "en") return item.name || "";
+  const trans = (item.translations || []).find(tr => tr.locale === locale);
+  return trans?.name || item.name || "";
+}
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const GRADIENTS = [
@@ -17,20 +26,23 @@ const GRADIENTS = [
   "from-blue-400 to-indigo-500","from-emerald-400 to-green-500",
   "from-orange-400 to-amber-500","from-teal-400 to-cyan-500",
 ];
-const PRICING_TYPES = [
-  { label: "Fixed",       value: "fixed" },
-  { label: "Quote",       value: "quote" },
-  { label: "Starting",    value: "starting_from" },
-  { label: "Per Hour",    value: "per_hour" },
-  { label: "Per Person",  value: "per_person" },
-  { label: "Per Day",     value: "per_day" },
-  { label: "Package",     value: "package" },
-];
 const LANGS = [
   { code: "en", flag: "🇺🇸", label: "EN" },
   { code: "hy", flag: "🇦🇲", label: "HY" },
   { code: "ru", flag: "🇷🇺", label: "RU" },
 ];
+
+function getPricingTypes(t) {
+  return [
+    { label: t("services.pricing_fixed"),      value: "fixed" },
+    { label: t("services.pricing_quote"),       value: "quote" },
+    { label: t("services.pricing_starting"),    value: "starting_from" },
+    { label: t("services.pricing_per_hour"),    value: "per_hour" },
+    { label: t("services.pricing_per_person"),  value: "per_person" },
+    { label: t("services.pricing_per_day"),     value: "per_day" },
+    { label: t("services.pricing_package"),     value: "package" },
+  ];
+}
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 function Inp({ label, placeholder, type = "text", prefix, suffix, value, onChange, required }) {
@@ -121,7 +133,7 @@ function getInitialTrans(translations, locale) {
 }
 
 /* ─── Full-page service editor ───────────────────────────────────────────── */
-function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
+function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
   const isNew = !initial?.id;
   const [serviceId, setServiceId] = useState(initial?.id || null);
   const [images, setImages]       = useState(initial?.images || []);
@@ -181,7 +193,6 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
       } else {
         await onUpdate(sid, payload);
       }
-      // Save HY / RU translations
       if (sid) {
         await Promise.all(
           ["hy", "ru"]
@@ -202,19 +213,19 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
   };
 
   const currentTrans = activeLang !== "en" ? transForm[activeLang] : null;
+  const PRICING_TYPES = getPricingTypes(t);
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      {/* ── Header ── */}
       <div className="bg-white border-b border-surface-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm font-medium text-surface-600 hover:text-surface-900 cursor-pointer border-none bg-transparent transition-colors"
         >
-          <ArrowLeft size={15} /> Back to Services
+          <ArrowLeft size={15} /> {t("services.back")}
         </button>
         <h2 className="text-sm font-bold text-surface-900">
-          {isNew ? "New Service" : `Edit: ${initial.name}`}
+          {isNew ? t("services.new_service") : `${t("products.edit_prefix")} ${initial.name}`}
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -222,26 +233,22 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
             disabled={saving || !form.name.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-surface-700 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer disabled:opacity-40 transition-colors"
           >
-            <Save size={14} /> {saving ? "Saving…" : "Save Draft"}
+            <Save size={14} /> {saving ? t("common.saving") : t("common.save_draft")}
           </button>
           <button
             onClick={() => handleSave("active")}
             disabled={saving || !form.name.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
           >
-            <Send size={14} /> {saved ? "Saved!" : "Publish"}
+            <Send size={14} /> {saved ? t("common.saved") : t("common.publish")}
           </button>
         </div>
       </div>
 
-      {/* ── Two-column layout ── */}
       <div className="flex-1 flex gap-5 p-6 max-w-[1200px] w-full mx-auto">
-
-        {/* Left — form sections */}
         <div className="flex-1 space-y-4 min-w-0">
 
-          <Section title="Basic Information" icon={Briefcase} defaultOpen>
-            {/* Language tabs */}
+          <Section title={t("services.section_basic")} icon={Briefcase} defaultOpen>
             <div className="flex gap-1.5 pt-1">
               {LANGS.map(lang => (
                 <button
@@ -258,42 +265,36 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
               ))}
               {activeLang !== "en" && (
                 <span className="ml-auto text-[11px] text-surface-400 self-center">
-                  Translation — will be saved alongside English
+                  {t("common.translation_note")}
                 </span>
               )}
             </div>
 
-            {/* EN fields */}
             {activeLang === "en" && (
               <>
-                <Inp label="Service Name" required placeholder="e.g. Wedding Photography Package" value={form.name} onChange={e => set("name", e.target.value)} />
+                <Inp label={t("services.service_name")} required placeholder={t("services.name_placeholder")} value={form.name} onChange={e => set("name", e.target.value)} />
                 <div>
-                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">Description</label>
-                  <RichTextEditor
-                    value={form.description}
-                    onChange={v => set("description", v)}
-                    placeholder="Describe what's included in this service…"
-                    minHeight={110}
-                  />
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.description")}</label>
+                  <RichTextEditor value={form.description} onChange={v => set("description", v)} placeholder={t("services.desc_placeholder")} minHeight={110} />
                 </div>
-                <Inp label="Short Description" placeholder="One-liner shown in listings" value={form.short_description} onChange={e => set("short_description", e.target.value)} />
+                <Inp label={t("common.short_description")} placeholder={t("products.short_desc_placeholder")} value={form.short_description} onChange={e => set("short_description", e.target.value)} />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-surface-700 mb-1.5">Category</label>
+                    <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.category")}</label>
                     <select
                       value={form.category_id}
                       onChange={e => set("category_id", e.target.value)}
                       className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer focus:border-primary-400"
                     >
-                      <option value="">Select category…</option>
+                      <option value="">{t("common.select_category")}</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
                     </select>
                   </div>
                   <Inp
-                    label="Duration"
+                    label={t("services.duration")}
                     placeholder="e.g. 4"
                     type="number"
-                    suffix="hours"
+                    suffix={t("services.duration_suffix")}
                     value={form.duration_hours}
                     onChange={e => set("duration_hours", e.target.value)}
                   />
@@ -301,18 +302,17 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
               </>
             )}
 
-            {/* HY / RU translation fields */}
             {activeLang !== "en" && currentTrans && (
               <>
                 <Inp
-                  label={`Service Name (${activeLang.toUpperCase()})`}
+                  label={`${t("services.service_name")} (${activeLang.toUpperCase()})`}
                   placeholder={activeLang === "hy" ? "Ծառայության անվանում հայերեն" : "Название услуги на русском"}
                   value={currentTrans.name}
                   onChange={e => setTrans(activeLang, "name", e.target.value)}
                 />
                 <div>
                   <label className="block text-xs font-semibold text-surface-700 mb-1.5">
-                    Description ({activeLang.toUpperCase()})
+                    {t("common.description")} ({activeLang.toUpperCase()})
                   </label>
                   <RichTextEditor
                     value={currentTrans.description}
@@ -322,7 +322,7 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
                   />
                 </div>
                 <Inp
-                  label={`Short Description (${activeLang.toUpperCase()})`}
+                  label={`${t("common.short_description")} (${activeLang.toUpperCase()})`}
                   placeholder={activeLang === "hy" ? "Կարճ նկարագրություն" : "Краткое описание"}
                   value={currentTrans.short_description}
                   onChange={e => setTrans(activeLang, "short_description", e.target.value)}
@@ -331,14 +331,14 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
             )}
           </Section>
 
-          <Section title="Tags & Coverage" icon={Tag} defaultOpen>
-            <TagInput label="Tags" value={form.tags} onChange={v => set("tags", v)} />
-            <TagInput label="Service Areas" value={form.service_area} onChange={v => set("service_area", v)} />
+          <Section title={t("services.section_tags")} icon={Tag} defaultOpen>
+            <TagInput label={t("common.tags")} value={form.tags} onChange={v => set("tags", v)} />
+            <TagInput label={t("services.service_areas")} value={form.service_area} onChange={v => set("service_area", v)} />
           </Section>
 
-          <Section title="Pricing" icon={DollarSign} defaultOpen>
+          <Section title={t("services.section_pricing")} icon={DollarSign} defaultOpen>
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-2">Pricing Type</label>
+              <label className="block text-xs font-semibold text-surface-700 mb-2">{t("services.pricing_type")}</label>
               <div className="grid grid-cols-4 gap-2">
                 {PRICING_TYPES.map(pt => (
                   <button
@@ -356,9 +356,9 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Inp label="Base Price" placeholder="0" prefix={form.currency} type="number" value={form.base_price} onChange={e => set("base_price", e.target.value)} />
+              <Inp label={t("services.base_price")} placeholder="0" prefix={form.currency} type="number" value={form.base_price} onChange={e => set("base_price", e.target.value)} />
               <div>
-                <label className="block text-xs font-semibold text-surface-700 mb-1.5">Currency</label>
+                <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.currency")}</label>
                 <select
                   value={form.currency}
                   onChange={e => set("currency", e.target.value)}
@@ -371,12 +371,9 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
           </Section>
         </div>
 
-        {/* Right sidebar */}
         <div className="w-[320px] flex-shrink-0 space-y-4">
-
-          {/* Status + actions */}
           <div className="bg-white rounded-2xl border border-surface-200 p-4">
-            <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Visibility</p>
+            <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">{t("common.visibility")}</p>
             <div className="flex gap-2 mb-4">
               {["draft", "active"].map(s => (
                 <button
@@ -390,16 +387,15 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
                       : "border-surface-100 text-surface-400 bg-surface-50 hover:border-surface-200"
                   }`}
                 >
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                  {s === "active" ? t("products.status_active") : t("products.status_draft")}
                 </button>
               ))}
             </div>
 
-            {/* Featured toggle */}
             <div className="flex items-center justify-between py-3 border-t border-surface-100">
               <div>
-                <p className="text-xs font-semibold text-surface-700">Featured</p>
-                <p className="text-[11px] text-surface-400">Highlight in store</p>
+                <p className="text-xs font-semibold text-surface-700">{t("services.featured")}</p>
+                <p className="text-[11px] text-surface-400">{t("services.highlight_store")}</p>
               </div>
               <button
                 onClick={() => set("is_featured", !form.is_featured)}
@@ -416,54 +412,49 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
                 disabled={saving || !form.name.trim()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
               >
-                <Send size={14} /> {saving ? "Saving…" : saved ? "Saved!" : "Save & Publish"}
+                <Send size={14} /> {saving ? t("common.saving") : saved ? t("common.saved") : t("common.save_publish")}
               </button>
               <button
                 onClick={() => handleSave("draft")}
                 disabled={saving || !form.name.trim()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-surface-50 text-surface-700 text-sm font-semibold rounded-xl border border-surface-200 hover:bg-surface-100 cursor-pointer disabled:opacity-40 transition-colors"
               >
-                <Save size={14} /> Save as Draft
+                <Save size={14} /> {t("common.save_draft")}
               </button>
             </div>
           </div>
 
-          {/* Images */}
           <div className="bg-white rounded-2xl border border-surface-200 p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">Images</p>
-              {images.length > 0 && <span className="text-[11px] text-surface-400">{images.length} uploaded</span>}
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">{t("common.images")}</p>
+              {images.length > 0 && <span className="text-[11px] text-surface-400">{images.length} {t("common.uploaded")}</span>}
             </div>
             {!serviceId && (
               <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                <p className="text-[11px] text-amber-700 font-medium">Save the service first to unlock image upload</p>
+                <p className="text-[11px] text-amber-700 font-medium">{t("services.save_first")}</p>
               </div>
             )}
-            <ImageManager
-              entityId={serviceId}
-              type="service"
-              images={images}
-              onChange={setImages}
-            />
+            <ImageManager entityId={serviceId} type="service" images={images} onChange={setImages} />
           </div>
 
-          {/* Summary */}
           {(form.name || form.base_price) && (
             <div className="bg-surface-50 rounded-2xl border border-surface-200 p-4">
-              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Summary</p>
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">{t("common.summary")}</p>
               <div className="space-y-2 text-xs text-surface-600">
-                {form.name && <div className="flex justify-between"><span className="text-surface-400">Name</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
-                {form.base_price && <div className="flex justify-between"><span className="text-surface-400">Price</span><span className="font-medium">{form.currency} {parseFloat(form.base_price).toLocaleString()}</span></div>}
-                {form.duration_hours && <div className="flex justify-between"><span className="text-surface-400">Duration</span><span className="font-medium">{form.duration_hours}h</span></div>}
-                <div className="flex justify-between"><span className="text-surface-400">Images</span><span className="font-medium">{images.length}</span></div>
+                {form.name && <div className="flex justify-between"><span className="text-surface-400">{t("common.name_label")}</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
+                {form.base_price && <div className="flex justify-between"><span className="text-surface-400">{t("common.price_label")}</span><span className="font-medium">{form.currency} {parseFloat(form.base_price).toLocaleString()}</span></div>}
+                {form.duration_hours && <div className="flex justify-between"><span className="text-surface-400">{t("services.duration")}</span><span className="font-medium">{form.duration_hours}{t("services.duration_suffix")}</span></div>}
+                <div className="flex justify-between"><span className="text-surface-400">{t("common.images")}</span><span className="font-medium">{images.length}</span></div>
                 <div className="flex justify-between">
-                  <span className="text-surface-400">Languages</span>
+                  <span className="text-surface-400">{t("common.languages")}</span>
                   <span className="font-medium text-primary-600">
                     EN{transForm.hy?.name ? " · HY" : ""}{transForm.ru?.name ? " · RU" : ""}
                   </span>
                 </div>
-                <div className="flex justify-between"><span className="text-surface-400">Status</span>
-                  <span className={`font-bold ${form.status === "active" ? "text-success-600" : "text-surface-500"}`}>{form.status}</span>
+                <div className="flex justify-between"><span className="text-surface-400">{t("common.status")}</span>
+                  <span className={`font-bold ${form.status === "active" ? "text-success-600" : "text-surface-500"}`}>
+                    {form.status === "active" ? t("products.status_active") : t("products.status_draft")}
+                  </span>
                 </div>
               </div>
             </div>
@@ -476,23 +467,25 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
 
 /* ─── List page ──────────────────────────────────────────────────────────── */
 export default function VendorServices() {
+  const { t, locale } = useLocale();
   const searchParams = useSearchParams();
-  const [mode, setMode]             = useState("list");
+  const [mode, setMode]               = useState("list");
   const [editService, setEditService] = useState(null);
-  const [services, setServices]     = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [filterCat, setFilterCat]   = useState("");
+  const [services, setServices]       = useState([]);
+  const [categories, setCategories]   = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filterCat, setFilterCat]     = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
+  const PRICING_TYPES = getPricingTypes(t);
+
   const fetchServices = useCallback(() => {
-    return vendorAPI.services({ limit: 100 })
+    return vendorAPI.services({ limit: 100, locale })
       .then(res => { setServices(res?.data || []); return res?.data || []; })
       .catch(() => [])
       .finally(() => setLoading(false));
-  }, []);
+  }, [locale]);
 
-  // Fetch full service (with images + translations) then open editor
   const openEdit = useCallback(async (serviceOrId) => {
     const id = typeof serviceOrId === "string" ? serviceOrId : serviceOrId?.id;
     if (!id) return;
@@ -507,38 +500,22 @@ export default function VendorServices() {
 
   useEffect(() => {
     const editId = searchParams?.get("edit");
-    fetchServices().then(() => {
-      if (editId) openEdit(editId);
-    });
+    fetchServices().then(() => { if (editId) openEdit(editId); });
     adminCategoriesAPI.list().then(res => setCategories(res?.data || [])).catch(() => {});
-  }, []);
+  }, [locale]);
 
-  const handleCreate = async (data) => {
-    const res = await vendorAPI.createService(data);
-    fetchServices();
-    return res;
-  };
-
-  const handleUpdate = async (id, data) => {
-    await vendorAPI.updateService(id, data);
-    fetchServices();
-  };
-
-  const handleDelete = async (id) => {
+  const handleCreate   = async (data) => { const res = await vendorAPI.createService(data); fetchServices(); return res; };
+  const handleUpdate   = async (id, data) => { await vendorAPI.updateService(id, data); fetchServices(); };
+  const handleDelete   = async (id) => {
     if (!confirm("Delete this service?")) return;
-    try {
-      await vendorAPI.deleteService(id);
-      setServices(prev => prev.filter(s => s.id !== id));
-    } catch (e) { console.error(e); }
+    try { await vendorAPI.deleteService(id); setServices(prev => prev.filter(s => s.id !== id)); } catch (e) { console.error(e); }
   };
-
   const handlePublish   = async (id) => { try { await vendorAPI.publishService(id);   setServices(prev => prev.map(s => s.id === id ? { ...s, status: "active" } : s)); } catch (e) { console.error(e); } };
   const handleUnpublish = async (id) => { try { await vendorAPI.unpublishService(id); setServices(prev => prev.map(s => s.id === id ? { ...s, status: "draft" }  : s)); } catch (e) { console.error(e); } };
-
   const goBack = () => { setMode("list"); setEditService(null); fetchServices(); };
 
-  if (mode === "create") return <ServiceEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} />;
-  if (mode === "edit" && editService) return <ServiceEditor initial={editService} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} />;
+  if (mode === "create") return <ServiceEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
+  if (mode === "edit" && editService) return <ServiceEditor initial={editService} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
 
   const filtered = services.filter(s => {
     if (filterCat && s.category_id !== filterCat) return false;
@@ -549,11 +526,11 @@ export default function VendorServices() {
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
       <TopBar
-        title="My Services"
-        subtitle={loading ? "Loading…" : `${filtered.length} of ${services.length} services`}
+        title={t("services.title")}
+        subtitle={loading ? t("common.loading") : `${filtered.length} of ${services.length} services`}
         actions={
           <button onClick={() => setMode("create")} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none">
-            <Plus size={15} /> Add Service
+            <Plus size={15} /> {t("services.add_service")}
           </button>
         }
       />
@@ -562,29 +539,30 @@ export default function VendorServices() {
         <Filter size={14} className="text-surface-400" />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
-          <option value="">All Categories</option>
+          <option value="">{t("services.all_categories")}</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
+          <option value="">{t("services.all_statuses")}</option>
+          <option value="active">{t("products.status_active")}</option>
+          <option value="draft">{t("products.status_draft")}</option>
         </select>
         {(filterCat || filterStatus) && (
-          <button onClick={() => { setFilterCat(""); setFilterStatus(""); }} className="text-xs text-primary-600 hover:underline cursor-pointer border-none bg-transparent">Clear</button>
+          <button onClick={() => { setFilterCat(""); setFilterStatus(""); }}
+            className="text-xs text-primary-600 hover:underline cursor-pointer border-none bg-transparent">{t("common.clear")}</button>
         )}
       </div>
 
       <div className="flex-1 p-6">
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading services…</div>
+          <div className="flex items-center justify-center py-20 text-sm text-surface-400">{t("services.loading")}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <p className="text-sm text-surface-400">{services.length === 0 ? "No services yet." : "No services match filters."}</p>
+            <p className="text-sm text-surface-400">{services.length === 0 ? t("services.no_services") : t("services.no_match")}</p>
             {services.length === 0 && (
               <button onClick={() => setMode("create")} className="px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none">
-                Add your first service
+                {t("services.add_first")}
               </button>
             )}
           </div>
@@ -601,20 +579,22 @@ export default function VendorServices() {
                       <button onClick={() => openEdit(svc)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Pencil size={12} className="text-primary-600" /></button>
                       <button onClick={() => handleDelete(svc.id)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Trash2 size={12} className="text-danger-500" /></button>
                     </div>
-                    <span className={`absolute top-3 left-3 badge ${svc.status === "active" ? "badge-success" : "badge-gray"} text-[10px]`}>{svc.status}</span>
+                    <span className={`absolute top-3 left-3 badge ${svc.status === "active" ? "badge-success" : "badge-gray"} text-[10px]`}>
+                      {svc.status === "active" ? t("products.status_active") : t("products.status_draft")}
+                    </span>
                     <div className="absolute bottom-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                       {svc.status !== "active"
-                        ? <button onClick={() => handlePublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-primary-600 rounded-lg cursor-pointer border-none shadow-card"><Eye size={10} />Publish</button>
-                        : <button onClick={() => handleUnpublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-surface-600 rounded-lg cursor-pointer border-none shadow-card"><EyeOff size={10} />Unpublish</button>
+                        ? <button onClick={() => handlePublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-primary-600 rounded-lg cursor-pointer border-none shadow-card"><Eye size={10} />{t("common.publish")}</button>
+                        : <button onClick={() => handleUnpublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-surface-600 rounded-lg cursor-pointer border-none shadow-card"><EyeOff size={10} />{t("common.unpublish")}</button>
                       }
                     </div>
                   </div>
                   <div className="p-4">
                     <p className="text-xs text-surface-400 mb-1">{svc.category_name || categories.find(c => c.id === svc.category_id)?.name || "—"}</p>
-                    <p className="text-sm font-semibold text-surface-800 mb-3 leading-snug line-clamp-2">{svc.name}</p>
+                    <p className="text-sm font-semibold text-surface-800 mb-3 leading-snug line-clamp-2">{getLocName(svc, locale)}</p>
                     <div className="flex items-center gap-3 text-xs text-surface-500 mb-3">
                       {(svc.duration_hours > 0 || svc.duration_hrs > 0) && (
-                        <span className="flex items-center gap-1"><Clock size={11} />{svc.duration_hours || svc.duration_hrs}h</span>
+                        <span className="flex items-center gap-1"><Clock size={11} />{svc.duration_hours || svc.duration_hrs}{t("services.duration_suffix")}</span>
                       )}
                       {svc.review_count > 0 && (
                         <span className="flex items-center gap-1"><Star size={11} className="fill-warning-400 text-warning-400" />{svc.rating?.toFixed(1)}</span>
@@ -622,7 +602,7 @@ export default function VendorServices() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-base font-bold text-surface-900">{svc.currency || "AMD"} {Number(svc.base_price || 0).toLocaleString()}</span>
-                      <span className="text-xs text-surface-400 capitalize">{PRICING_TYPES.find(p => p.value === svc.pricing_type)?.label || svc.pricing_type || ""}</span>
+                      <span className="text-xs text-surface-400">{PRICING_TYPES.find(p => p.value === svc.pricing_type)?.label || svc.pricing_type || ""}</span>
                     </div>
                   </div>
                 </div>
@@ -631,7 +611,7 @@ export default function VendorServices() {
             <button onClick={() => setMode("create")}
               className="border-2 border-dashed border-surface-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer bg-transparent min-h-[240px]">
               <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center"><Plus size={20} className="text-surface-400" /></div>
-              <p className="text-sm font-medium text-surface-400">Add Service</p>
+              <p className="text-sm font-medium text-surface-400">{t("services.add_service")}</p>
             </button>
           </div>
         )}

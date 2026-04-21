@@ -7,15 +7,16 @@ import {
   Settings, Sparkles, CreditCard, Bell, LogOut,
   ClipboardCheck, CalendarCheck, CalendarDays, DollarSign,
   Star, Headphones, Megaphone, Shield, Inbox, Heart,
-  ClipboardList,
+  ClipboardList, Briefcase,
 } from "lucide-react";
 import { clearTokens } from "@/lib/auth";
 import { authAPI } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
 const ICONS = {
   LayoutDashboard, Users, Store, ShoppingBag, Calendar,
   Package, Tag, BarChart2, MessageSquare, FileText,
-  Settings, Sparkles, CreditCard, Bell,
+  Settings, Sparkles, CreditCard, Bell, Briefcase,
   ClipboardCheck, CalendarCheck, CalendarDays, DollarSign,
   Star, Headphones, Megaphone, Shield, Inbox, Heart,
   ClipboardList,
@@ -23,12 +24,13 @@ const ICONS = {
 
 export default function Sidebar({ nav, role, userName = "Admin User", userEmail = "admin@salooote.am" }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
+  const { t }    = useLocale();
 
   const roleConfig = {
-    admin:  { label: "Administrator", color: "bg-primary-600", dot: "bg-primary-400" },
-    vendor: { label: "Vendor Portal",  color: "bg-violet-600",  dot: "bg-violet-400" },
-    user:   { label: "My Account",     color: "bg-blue-600",    dot: "bg-blue-400" },
+    admin:  { labelKey: "brand.admin_title",  color: "bg-primary-600" },
+    vendor: { labelKey: "brand.vendor_portal", color: "bg-violet-600" },
+    user:   { labelKey: "brand.name",          color: "bg-blue-600" },
   };
   const config = roleConfig[role] || roleConfig.admin;
 
@@ -48,8 +50,8 @@ export default function Sidebar({ nav, role, userName = "Admin User", userEmail 
             <span className="text-white text-xs font-bold">S</span>
           </div>
           <div>
-            <p className="text-sm font-bold text-surface-900 leading-none">Salooote</p>
-            <p className="text-[10px] text-surface-400 mt-0.5">{config.label}</p>
+            <p className="text-sm font-bold text-surface-900 leading-none">{t("brand.name")}</p>
+            <p className="text-[10px] text-surface-400 mt-0.5">{t(config.labelKey)}</p>
           </div>
         </Link>
       </div>
@@ -66,7 +68,7 @@ export default function Sidebar({ nav, role, userName = "Admin User", userEmail 
               className={`sidebar-link ${isActive ? "active" : ""}`}
             >
               <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} />
-              <span>{item.label}</span>
+              <span>{item.key ? t(item.key) : item.label}</span>
               {item.badge && (
                 <span className="ml-auto bg-primary-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                   {item.badge}
@@ -93,7 +95,7 @@ export default function Sidebar({ nav, role, userName = "Admin User", userEmail 
           className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-danger-600 hover:bg-danger-50 transition-colors cursor-pointer border-none bg-transparent text-left"
         >
           <LogOut size={15} />
-          <span className="text-xs font-semibold">Sign Out</span>
+          <span className="text-xs font-semibold">{t("sidebar.sign_out")}</span>
         </button>
       </div>
     </aside>

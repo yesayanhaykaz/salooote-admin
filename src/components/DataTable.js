@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
 import { Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
+import { useLocale } from "@/lib/i18n";
 
 export default function DataTable({ columns, data, pageSize = 8, searchable = true, searchKeys = [] }) {
+  const { t } = useLocale();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState(null);
@@ -36,11 +38,11 @@ export default function DataTable({ columns, data, pageSize = 8, searchable = tr
             <input
               value={query}
               onChange={e => { setQuery(e.target.value); setPage(1); }}
-              placeholder="Search…"
+              placeholder={t("table.search_placeholder")}
               className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
             />
           </div>
-          <span className="text-xs text-surface-400 ml-auto">{filtered.length} results</span>
+          <span className="text-xs text-surface-400 ml-auto">{filtered.length} {t("table.results")}</span>
         </div>
       )}
 
@@ -66,7 +68,7 @@ export default function DataTable({ columns, data, pageSize = 8, searchable = tr
           </thead>
           <tbody>
             {paginated.length === 0 ? (
-              <tr><td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-surface-400">No results found</td></tr>
+              <tr><td colSpan={columns.length} className="px-5 py-12 text-center text-sm text-surface-400">{t("table.no_results")}</td></tr>
             ) : paginated.map((row, i) => (
               <tr key={i} className="table-row border-b border-surface-50 last:border-0 transition-colors">
                 {columns.map(col => (
@@ -83,7 +85,7 @@ export default function DataTable({ columns, data, pageSize = 8, searchable = tr
       {totalPages > 1 && (
         <div className="px-5 py-3.5 border-t border-surface-100 flex items-center justify-between">
           <span className="text-xs text-surface-400">
-            Page {page} of {totalPages}
+            {t("table.page")} {page} {t("table.of")} {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button

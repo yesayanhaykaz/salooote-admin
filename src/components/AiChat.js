@@ -7,23 +7,11 @@ import {
   ImagePlus, Maximize2, XCircle,
 } from "lucide-react";
 import { aiAPI, uploadAPI } from "@/lib/api";
-
-// ─── Suggestion chips ─────────────────────────────────────────────────────────
-
-const VENDOR_SUGGESTIONS = [
-  "I want to add a new product",
-  "Create a new service for me",
-  "Update my business info",
-];
-
-const ADMIN_SUGGESTIONS = [
-  "Create a new vendor",
-  "Add a new category",
-];
+import { useLocale } from "@/lib/i18n";
 
 // ─── Action result cards ──────────────────────────────────────────────────────
 
-function ProductCard({ data, router }) {
+function ProductCard({ data, router, t }) {
   return (
     <div
       onClick={() => router.push(`/vendor/products?edit=${data.id}`)}
@@ -34,7 +22,7 @@ function ProductCard({ data, router }) {
           <Package size={18} className="text-primary-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-0.5">Product Created ✓</p>
+          <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-0.5">{t("ai_assistant.product_created")}</p>
           <p className="text-sm font-bold text-surface-900 truncate">{data.name}</p>
           <p className="text-xs text-surface-400">/{data.slug}</p>
         </div>
@@ -43,21 +31,21 @@ function ProductCard({ data, router }) {
       {data.photoCount > 0 && (
         <div className="mt-2 flex items-center gap-1.5">
           <ImagePlus size={12} className="text-primary-400" />
-          <p className="text-xs text-primary-500 font-medium">{data.photoCount} photo{data.photoCount > 1 ? "s" : ""} uploaded ✓</p>
+          <p className="text-xs text-primary-500 font-medium">{data.photoCount} {t("ai_assistant.photos_uploaded")}</p>
         </div>
       )}
       {data.photoFailed > 0 && (
         <div className="mt-1 flex items-center gap-1.5">
           <XCircle size={12} className="text-red-400" />
-          <p className="text-xs text-red-500">{data.photoFailed} photo{data.photoFailed > 1 ? "s" : ""} failed — add manually in editor</p>
+          <p className="text-xs text-red-500">{data.photoFailed} {t("ai_assistant.photos_failed")}</p>
         </div>
       )}
-      <p className="text-xs text-surface-500 mt-1.5">Click to open editor →</p>
+      <p className="text-xs text-surface-500 mt-1.5">{t("ai_assistant.click_to_open_editor")}</p>
     </div>
   );
 }
 
-function ServiceCard({ data, router }) {
+function ServiceCard({ data, router, t }) {
   return (
     <div
       onClick={() => router.push(`/vendor/services?edit=${data.id}`)}
@@ -68,7 +56,7 @@ function ServiceCard({ data, router }) {
           <Wrench size={18} className="text-brand-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-0.5">Service Created ✓</p>
+          <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-0.5">{t("ai_assistant.service_created")}</p>
           <p className="text-sm font-bold text-surface-900 truncate">{data.name}</p>
           <p className="text-xs text-surface-400">/{data.slug}</p>
         </div>
@@ -77,21 +65,21 @@ function ServiceCard({ data, router }) {
       {data.photoCount > 0 && (
         <div className="mt-2 flex items-center gap-1.5">
           <ImagePlus size={12} className="text-brand-400" />
-          <p className="text-xs text-brand-500 font-medium">{data.photoCount} photo{data.photoCount > 1 ? "s" : ""} uploaded ✓</p>
+          <p className="text-xs text-brand-500 font-medium">{data.photoCount} {t("ai_assistant.photos_uploaded")}</p>
         </div>
       )}
       {data.photoFailed > 0 && (
         <div className="mt-1 flex items-center gap-1.5">
           <XCircle size={12} className="text-red-400" />
-          <p className="text-xs text-red-500">{data.photoFailed} photo{data.photoFailed > 1 ? "s" : ""} failed — add manually in editor</p>
+          <p className="text-xs text-red-500">{data.photoFailed} {t("ai_assistant.photos_failed")}</p>
         </div>
       )}
-      <p className="text-xs text-surface-500 mt-1.5">Click to open editor →</p>
+      <p className="text-xs text-surface-500 mt-1.5">{t("ai_assistant.click_to_open_editor")}</p>
     </div>
   );
 }
 
-function VendorCard({ data, router }) {
+function VendorCard({ data, router, t }) {
   return (
     <div
       onClick={() => router.push(`/admin/vendors`)}
@@ -102,7 +90,7 @@ function VendorCard({ data, router }) {
           <Building2 size={18} className="text-sage-700" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-sage-700 uppercase tracking-wide mb-0.5">Vendor Created ✓</p>
+          <p className="text-xs font-semibold text-sage-700 uppercase tracking-wide mb-0.5">{t("ai_assistant.vendor_created")}</p>
           <p className="text-sm font-bold text-surface-900 truncate">{data.business_name}</p>
           <p className="text-xs text-surface-400">{data.email}</p>
         </div>
@@ -110,15 +98,15 @@ function VendorCard({ data, router }) {
       </div>
       {data.password && (
         <div className="mt-2 bg-surface-50 rounded-lg px-3 py-2 border border-surface-100">
-          <p className="text-xs text-surface-500">Temp password: <span className="font-mono font-bold text-surface-800">{data.password}</span></p>
+          <p className="text-xs text-surface-500">{t("ai_assistant.temp_password")} <span className="font-mono font-bold text-surface-800">{data.password}</span></p>
         </div>
       )}
-      <p className="text-xs text-surface-500 mt-2">Click to view vendors →</p>
+      <p className="text-xs text-surface-500 mt-2">{t("ai_assistant.click_to_view_vendors")}</p>
     </div>
   );
 }
 
-function CategoryCard({ data, router }) {
+function CategoryCard({ data, router, t }) {
   return (
     <div
       onClick={() => router.push(`/admin/categories`)}
@@ -129,18 +117,18 @@ function CategoryCard({ data, router }) {
           {data.emoji || <Tag size={18} className="text-warm-600" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-warm-700 uppercase tracking-wide mb-0.5">Category Created ✓</p>
+          <p className="text-xs font-semibold text-warm-700 uppercase tracking-wide mb-0.5">{t("ai_assistant.category_created")}</p>
           <p className="text-sm font-bold text-surface-900 truncate">{data.name}</p>
           <p className="text-xs text-surface-400">/{data.slug}</p>
         </div>
         <ChevronRight size={16} className="text-surface-300 group-hover:text-warm-600 transition-colors flex-shrink-0" />
       </div>
-      <p className="text-xs text-surface-500 mt-2">Click to manage categories →</p>
+      <p className="text-xs text-surface-500 mt-2">{t("ai_assistant.click_to_manage_categories")}</p>
     </div>
   );
 }
 
-function ProfileCard({ data }) {
+function ProfileCard({ data, t }) {
   return (
     <div className="mt-3 bg-white border border-surface-200 rounded-xl p-4">
       <div className="flex items-center gap-3">
@@ -148,7 +136,7 @@ function ProfileCard({ data }) {
           <User size={18} className="text-primary-600" />
         </div>
         <div>
-          <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-0.5">Profile Updated ✓</p>
+          <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-0.5">{t("ai_assistant.profile_updated")}</p>
           <p className="text-sm font-bold text-surface-900">{data.business_name}</p>
         </div>
       </div>
@@ -158,7 +146,7 @@ function ProfileCard({ data }) {
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, router }) {
+function MessageBubble({ msg, router, t }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
@@ -187,11 +175,11 @@ function MessageBubble({ msg, router }) {
         {/* Action card */}
         {msg.action && (
           <>
-            {msg.action.type === "product_created"  && <ProductCard  data={msg.action.data} router={router} />}
-            {msg.action.type === "service_created"  && <ServiceCard  data={msg.action.data} router={router} />}
-            {msg.action.type === "vendor_created"   && <VendorCard   data={msg.action.data} router={router} />}
-            {msg.action.type === "category_created" && <CategoryCard data={msg.action.data} router={router} />}
-            {msg.action.type === "profile_updated"  && <ProfileCard  data={msg.action.data} />}
+            {msg.action.type === "product_created"  && <ProductCard  data={msg.action.data} router={router} t={t} />}
+            {msg.action.type === "service_created"  && <ServiceCard  data={msg.action.data} router={router} t={t} />}
+            {msg.action.type === "vendor_created"   && <VendorCard   data={msg.action.data} router={router} t={t} />}
+            {msg.action.type === "category_created" && <CategoryCard data={msg.action.data} router={router} t={t} />}
+            {msg.action.type === "profile_updated"  && <ProfileCard  data={msg.action.data} t={t} />}
           </>
         )}
       </div>
@@ -217,19 +205,32 @@ function TypingIndicator() {
 }
 
 // ─── Shared ChatInterface ─────────────────────────────────────────────────────
-// Used by both the floating panel and the full page
 
 export function ChatInterface({ role = "vendor", compact = true, onClose }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [pendingImages, setPendingImages] = useState([]); // { file, preview }[]
+  const [pendingImages, setPendingImages] = useState([]);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const suggestions = role === "vendor" ? VENDOR_SUGGESTIONS : ADMIN_SUGGESTIONS;
+  // Suggestions: display label (translated) + value sent to AI (always English)
+  const suggestions = role === "vendor"
+    ? [
+        { label: t("ai_assistant.quick_action_product"), value: "I want to add a new product" },
+        { label: t("ai_assistant.quick_action_service"), value: "Create a new service for me" },
+        { label: t("ai_assistant.quick_action_business"), value: "Update my business info" },
+      ]
+    : [
+        { label: t("ai_assistant.quick_action_vendor"),   value: "Create a new vendor" },
+        { label: t("ai_assistant.quick_action_category"), value: "Add a new category" },
+      ];
+
+  const welcomeTitle = role === "vendor" ? t("ai_assistant.greeting")        : t("ai_assistant.admin_greeting");
+  const welcomeSub   = role === "vendor" ? t("ai_assistant.description")     : t("ai_assistant.admin_description");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -241,7 +242,6 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
       preview: URL.createObjectURL(file),
     }));
     setPendingImages(prev => [...prev, ...newItems]);
-    // reset input so same files can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -274,7 +274,6 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
 
       let finalAction = action ? { ...action, data: { ...action.data } } : null;
 
-      // Upload images right after product/service creation
       if (finalAction && captured.length > 0) {
         const id = finalAction.data?.id;
         const uploadFn = finalAction.type === "product_created"
@@ -316,11 +315,6 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
     }
   };
 
-  const welcomeTitle = role === "vendor" ? "Hey! I'm your AI assistant 👋" : "Admin AI Assistant";
-  const welcomeSub = role === "vendor"
-    ? "Describe a product or service in any language and I'll create it with full translations. Attach photos too!"
-    : "I can create new vendors and categories. Just describe what you need.";
-
   return (
     <div className="flex flex-col h-full">
 
@@ -338,17 +332,17 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
             {role === "vendor" && (
               <div className="flex items-center gap-2 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2">
                 <ImagePlus size={13} className="text-primary-500 flex-shrink-0" />
-                <p className="text-xs text-primary-600">Attach photos using the 📎 button below</p>
+                <p className="text-xs text-primary-600">{t("ai_assistant.attach_hint")}</p>
               </div>
             )}
             <div className="flex flex-col gap-2 w-full mt-1">
               {suggestions.map((s, i) => (
                 <button
                   key={i}
-                  onClick={() => send(s)}
+                  onClick={() => send(s.value)}
                   className="text-left px-3 py-2.5 bg-white border border-surface-200 rounded-xl text-xs text-surface-700 font-medium hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 transition-all cursor-pointer"
                 >
-                  {s}
+                  {s.label}
                 </button>
               ))}
             </div>
@@ -356,7 +350,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} router={router} />
+          <MessageBubble key={i} msg={msg} router={router} t={t} />
         ))}
 
         {loading && <TypingIndicator />}
@@ -382,7 +376,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
             </div>
           ))}
           <p className="w-full text-[10px] text-surface-400 mt-0.5">
-            {pendingImages.length} photo{pendingImages.length > 1 ? "s" : ""} ready — will be attached to the next created product/service
+            {pendingImages.length} {t("ai_assistant.photos_ready")}
           </p>
         </div>
       )}
@@ -394,7 +388,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading}
-            title="Attach photos"
+            title={t("ai_assistant.attach_hint")}
             className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border-none bg-transparent cursor-pointer text-surface-400 hover:text-primary-600 hover:bg-primary-50 transition-all disabled:opacity-40"
           >
             <ImagePlus size={17} />
@@ -414,11 +408,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              role === "vendor"
-                ? "Describe your product, service, or update..."
-                : "Describe what to create..."
-            }
+            placeholder={t("ai_assistant.input_placeholder")}
             rows={1}
             disabled={loading}
             className="flex-1 resize-none bg-transparent border-none outline-none text-sm text-surface-800 placeholder:text-surface-400 leading-relaxed disabled:opacity-50 py-0.5"
@@ -439,7 +429,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
           </button>
         </div>
         <p className="text-[10px] text-surface-400 text-center mt-1.5">
-          Enter to send · Shift+Enter for new line · 📎 attach photos
+          {t("ai_assistant.input_hint")}
         </p>
       </div>
     </div>
@@ -450,6 +440,7 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
 
 export default function AiChat({ role = "vendor" }) {
   const router = useRouter();
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
 
   const fullPagePath = role === "vendor" ? "/vendor/ai" : "/admin/ai";
@@ -465,7 +456,7 @@ export default function AiChat({ role = "vendor" }) {
         style={{ boxShadow: "0 8px 32px rgba(109,40,217,0.35)" }}
       >
         <Sparkles size={16} />
-        AI Assistant
+        {t("ai_assistant.title")}
       </button>
 
       {/* Floating panel */}
@@ -485,11 +476,10 @@ export default function AiChat({ role = "vendor" }) {
               <Sparkles size={15} className="text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-white leading-tight">AI Assistant</p>
+              <p className="text-sm font-bold text-white leading-tight">{t("ai_assistant.title")}</p>
               <p className="text-[11px] text-white/70">GPT-4o · EN / ՀՅ / RU</p>
             </div>
             <div className="flex items-center gap-1">
-              {/* Expand to full page */}
               <button
                 onClick={() => { setOpen(false); router.push(fullPagePath); }}
                 title="Open full page"

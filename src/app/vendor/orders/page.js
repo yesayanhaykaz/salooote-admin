@@ -4,8 +4,7 @@ import { Eye, RefreshCw } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import DataTable from "@/components/DataTable";
 import { vendorAPI } from "@/lib/api";
-
-const STATUS_FILTERS = ["All", "Pending", "Confirmed", "Processing", "Delivered", "Cancelled"];
+import { useLocale } from "@/lib/i18n";
 
 const STATUS_BADGE = {
   delivered:  "badge badge-success",
@@ -15,6 +14,17 @@ const STATUS_BADGE = {
   cancelled:  "badge badge-danger",
   shipped:    "badge badge-info",
   refunded:   "badge badge-gray",
+};
+
+const STATUS_KEYS = {
+  all:        "common.all",
+  pending:    "orders.pending",
+  confirmed:  "orders.confirmed",
+  processing: "orders.processing",
+  delivered:  "orders.delivered",
+  cancelled:  "orders.cancelled",
+  shipped:    "orders.shipped",
+  refunded:   "orders.refunded",
 };
 
 function fmtDate(iso) {
@@ -28,10 +38,14 @@ function fmtAmount(total, currency) {
 }
 
 export default function VendorOrders() {
+  const { t } = useLocale();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState("All");
+  const [activeFilter, setActiveFilter] = useState("all");
   const [updatingId, setUpdatingId] = useState(null);
+
+  const STATUS_FILTERS = ["all", "pending", "confirmed", "processing", "delivered", "cancelled"];
+  const DROPDOWN_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
 
   useEffect(() => {
     vendorAPI.orders({ limit: 50 })
@@ -49,32 +63,36 @@ export default function VendorOrders() {
     setUpdatingId(null);
   };
 
-  const filtered = activeFilter === "All"
+  const filtered = activeFilter === "all"
     ? orders
-    : orders.filter(o => o.status?.toLowerCase() === activeFilter.toLowerCase());
+    : orders.filter(o => o.status?.toLowerCase() === activeFilter);
 
   const tableData = filtered.map(o => ({
-    id: o.id?.slice(0, 8) || "—",
-    _id: o.id,
+    id:       o.id?.slice(0, 8) || "—",
+    _id:      o.id,
     customer: o.user_name || o.shipping_name || "Unknown",
-    product: o.items?.[0]?.product_name || (o.items?.length ? `${o.items.length} items` : "—"),
-    amount: fmtAmount(o.total, o.currency),
-    status: o.status || "pending",
-    date: fmtDate(o.created_at),
+    product:  o.items?.[0]?.product_name || (o.items?.length ? `${o.items.length} ${t("orders.items_suffix")}` : "—"),
+    amount:   fmtAmount(o.total, o.currency),
+    status:   o.status || "pending",
+    date:     fmtDate(o.created_at),
   }));
 
   const columns = [
-    { key: "id",       label: "Order ID",  sortable: true },
-    { key: "customer", label: "Customer",  sortable: true },
-    { key: "product",  label: "Product",   sortable: true },
-    { key: "amount",   label: "Amount",    sortable: true },
+    { key: "id",       label: t("orders.order_id"),    sortable: true },
+    { key: "customer", label: t("orders.col_customer"), sortable: true },
+    { key: "product",  label: t("orders.col_product"),  sortable: true },
+    { key: "amount",   label: t("orders.col_amount"),   sortable: true },
     {
-      key: "status", label: "Status",
-      render: val => <span className={STATUS_BADGE[val] || "badge badge-gray"}>{val}</span>,
+      key: "status", label: t("common.status"),
+      render: val => (
+        <span className={STATUS_BADGE[val] || "badge badge-gray"}>
+          {t(STATUS_KEYS[val] || "orders.pending")}
+        </span>
+      ),
     },
-    { key: "date", label: "Date", sortable: true },
+    { key: "date", label: t("orders.col_date"), sortable: true },
     {
-      key: "_id", label: "Actions",
+      key: "_id", label: t("common.actions"),
       render: (id, row) => (
         <div className="flex items-center gap-1.5">
           <select
@@ -83,8 +101,8 @@ export default function VendorOrders() {
             onChange={e => handleUpdateStatus(id, e.target.value)}
             className="text-xs border border-surface-200 rounded-lg px-2 py-1 bg-white text-surface-700 cursor-pointer outline-none"
           >
-            {["pending","confirmed","processing","shipped","delivered","cancelled"].map(s => (
-              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            {DROPDOWN_STATUSES.map(s => (
+              <option key={s} value={s}>{t(STATUS_KEYS[s])}</option>
             ))}
           </select>
         </div>
@@ -94,7 +112,7 @@ export default function VendorOrders() {
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar title="Orders" />
+      <TopBar title={t("sidebar.orders")} />
 
       <main className="flex-1 p-6 space-y-5">
         {/* Filter Pills */}
@@ -109,13 +127,15 @@ export default function VendorOrders() {
                   : "bg-white text-surface-600 border-surface-200 hover:border-primary-300 hover:text-primary-600"
               }`}
             >
-              {f}
+              {t(STATUS_KEYS[f])}
             </button>
           ))}
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading orders…</div>
+          <div className="flex items-center justify-center py-20 text-sm text-surface-400">
+            {t("common.loading")}
+          </div>
         ) : (
           <DataTable
             columns={columns}

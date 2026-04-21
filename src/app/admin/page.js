@@ -11,8 +11,10 @@ import {
 import TopBar from "@/components/TopBar";
 import StatsCard from "@/components/StatsCard";
 import { adminDashboardAPI, adminApprovalsAPI } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
 function StatusBadge({ status }) {
+  const { t } = useLocale();
   const map = {
     confirmed:   "badge badge-success",
     pending:     "badge badge-warning",
@@ -22,16 +24,33 @@ function StatusBadge({ status }) {
     in_progress: "badge badge-info",
     resolved:    "badge badge-success",
   };
-  const labels = {
-    confirmed: "Confirmed", pending: "Pending", negotiating: "Negotiating",
-    cancelled: "Cancelled", open: "Open", in_progress: "In Progress", resolved: "Resolved",
+  const labelKey = {
+    confirmed:   "common.confirmed",
+    pending:     "common.pending",
+    negotiating: "common.negotiating",
+    cancelled:   "orders.cancelled",
+    open:        "common.open",
+    in_progress: "common.in_progress",
+    resolved:    "common.resolved",
   };
-  return <span className={map[status] || "badge badge-gray"}>{labels[status] || status}</span>;
+  return (
+    <span className={map[status] || "badge badge-gray"}>
+      {labelKey[status] ? t(labelKey[status]) : status}
+    </span>
+  );
 }
 
+// common.confirmed / common.pending don't exist yet — they fall back to EN key name,
+// so we add a small inline fallback map for confirmed/pending from orders section.
 function PriorityBadge({ priority }) {
+  const { t } = useLocale();
   const map = { high: "badge badge-danger", medium: "badge badge-warning", low: "badge badge-info" };
-  return <span className={map[priority] || "badge badge-gray"}>{priority?.charAt(0).toUpperCase() + priority?.slice(1)}</span>;
+  const labelKey = { high: "common.high", medium: "common.medium", low: "common.low" };
+  return (
+    <span className={map[priority] || "badge badge-gray"}>
+      {labelKey[priority] ? t(labelKey[priority]) : priority?.charAt(0).toUpperCase() + priority?.slice(1)}
+    </span>
+  );
 }
 
 function fmt(n) {
@@ -47,6 +66,7 @@ function fmtMoney(n) {
 }
 
 export default function AdminDashboard() {
+  const { t } = useLocale();
   const [stats, setStats] = useState(null);
   const [revenueData, setRevenueData] = useState([]);
   const [approvals, setApprovals] = useState([]);
@@ -91,77 +111,77 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex flex-col flex-1">
-      <TopBar title="Dashboard" subtitle="Welcome back, Admin" />
+      <TopBar title={t("sidebar.dashboard")} subtitle={t("dashboard.welcome_admin")} />
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
 
         {/* Row 1 — 8 Stat Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-4">
           <StatsCard
-            label="Total Revenue"
+            label={t("dashboard.total_revenue")}
             value={fmtMoney(stats?.revenue_this_month)}
             change={12.5}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={DollarSign}
             iconBg="bg-pink-50"
             iconColor="text-pink-500"
           />
           <StatsCard
-            label="Total Orders"
+            label={t("dashboard.total_orders")}
             value={fmt(stats?.total_orders)}
             change={8.2}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={ShoppingBag}
             iconBg="bg-violet-50"
             iconColor="text-violet-500"
           />
           <StatsCard
-            label="Total Users"
+            label={t("dashboard.total_users")}
             value={fmt(stats?.total_users)}
             change={15.1}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={Users}
             iconBg="bg-blue-50"
             iconColor="text-blue-500"
           />
           <StatsCard
-            label="Active Vendors"
+            label={t("dashboard.active_vendors")}
             value={fmt(stats?.active_vendors)}
             change={3.4}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={Store}
             iconBg="bg-green-50"
             iconColor="text-green-500"
           />
           <StatsCard
-            label="Total Bookings"
+            label={t("dashboard.total_bookings")}
             value={fmt(stats?.total_bookings)}
             change={9.7}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={Calendar}
             iconBg="bg-amber-50"
             iconColor="text-amber-500"
           />
           <StatsCard
-            label="Monthly MRR"
+            label={t("dashboard.monthly_mrr")}
             value={fmtMoney(stats?.revenue_this_month)}
             change={5.3}
-            changeLabel="vs last month"
+            changeLabel={t("dashboard.vs_last_month")}
             icon={CreditCard}
             iconBg="bg-indigo-50"
             iconColor="text-indigo-500"
           />
           <StatsCard
-            label="New This Week"
+            label={t("dashboard.new_this_week")}
             value={fmt(stats?.orders_this_month)}
             change={22.0}
-            changeLabel="users joined"
+            changeLabel={t("dashboard.users_joined")}
             icon={UserPlus}
             iconBg="bg-teal-50"
             iconColor="text-teal-500"
           />
           <StatsCard
-            label="Pending Approvals"
+            label={t("dashboard.pending_approvals")}
             value={fmt(stats?.pending_approvals)}
             icon={Clock}
             iconBg="bg-orange-50"
@@ -169,15 +189,15 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Row 2 — Revenue Chart */}
+        {/* Row 2 — Revenue Chart + Pending Approvals */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl border border-surface-200 p-6">
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h2 className="text-sm font-bold text-surface-900">Revenue Overview</h2>
-                <p className="text-xs text-surface-400 mt-0.5">Monthly revenue — last 7 months</p>
+                <h2 className="text-sm font-bold text-surface-900">{t("dashboard.revenue_overview")}</h2>
+                <p className="text-xs text-surface-400 mt-0.5">{t("dashboard.revenue_subtitle")}</p>
               </div>
-              <span className="badge badge-purple">Last 7 months</span>
+              <span className="badge badge-purple">{t("dashboard.last_7_months")}</span>
             </div>
             {revenueData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -193,7 +213,7 @@ export default function AdminDashboard() {
                   <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: 10, border: "1px solid #e2e8f0", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", fontSize: 12 }}
-                    formatter={v => [`$${v.toLocaleString()}`, "Revenue"]}
+                    formatter={v => [`$${v.toLocaleString()}`, t("dashboard.revenue")]}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="#7c3aed" strokeWidth={2.5} fill="url(#revGrad)"
                     dot={{ fill: "#7c3aed", r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: "#7c3aed" }} />
@@ -201,7 +221,7 @@ export default function AdminDashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="h-[200px] flex items-center justify-center text-sm text-surface-400">
-                {loading ? "Loading…" : "No revenue data yet"}
+                {loading ? t("common.loading") : t("dashboard.no_revenue_data_yet")}
               </div>
             )}
           </div>
@@ -209,14 +229,14 @@ export default function AdminDashboard() {
           {/* Pending Approvals widget */}
           <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-surface-100 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-surface-900">Pending Approvals</h2>
-              <a href="/admin/approvals" className="text-xs text-primary-600 font-semibold hover:underline">View all</a>
+              <h2 className="text-sm font-bold text-surface-900">{t("dashboard.pending_approvals")}</h2>
+              <a href="/admin/approvals" className="text-xs text-primary-600 font-semibold hover:underline">{t("common.view_all")}</a>
             </div>
             <div className="divide-y divide-surface-50 p-2">
               {loading ? (
-                <p className="px-4 py-8 text-center text-sm text-surface-400">Loading…</p>
+                <p className="px-4 py-8 text-center text-sm text-surface-400">{t("common.loading")}</p>
               ) : approvals.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-surface-400">No pending applications</p>
+                <p className="px-4 py-8 text-center text-sm text-surface-400">{t("dashboard.no_pending_applications")}</p>
               ) : approvals.map(v => (
                 <div key={v.id} className="px-3 py-4 flex flex-col gap-2 hover:bg-surface-50 rounded-lg transition-colors">
                   <div className="flex items-start gap-3">
@@ -233,13 +253,13 @@ export default function AdminDashboard() {
                       onClick={() => handleApprove(v.id)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-success-50 text-success-600 text-xs font-semibold hover:bg-success-100 transition-colors"
                     >
-                      <CheckCircle size={12} /> Approve
+                      <CheckCircle size={12} /> {t("common.approve")}
                     </button>
                     <button
                       onClick={() => handleReject(v.id)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-danger-50 text-danger-600 text-xs font-semibold hover:bg-danger-100 transition-colors"
                     >
-                      <XCircle size={12} /> Reject
+                      <XCircle size={12} /> {t("common.reject")}
                     </button>
                   </div>
                 </div>

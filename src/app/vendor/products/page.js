@@ -11,6 +11,15 @@ import DataTable from "@/components/DataTable";
 import ImageManager from "@/components/ImageManager";
 import RichTextEditor from "@/components/RichTextEditor";
 import { vendorAPI, adminCategoriesAPI } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
+
+/* ─── locale-aware name helper ───────────────────────────────────────────── */
+function getLocName(item, locale) {
+  if (!item) return "";
+  if (locale === "en") return item.name || "";
+  const trans = (item.translations || []).find(tr => tr.locale === locale);
+  return trans?.name || item.name || "";
+}
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const GRADIENTS = [
@@ -19,9 +28,9 @@ const GRADIENTS = [
   "from-orange-400 to-amber-500","from-teal-400 to-cyan-500",
 ];
 const STATUS_BADGE = {
-  active: "badge badge-success",
+  active:    "badge badge-success",
   out_stock: "badge badge-danger",
-  draft: "badge badge-gray",
+  draft:     "badge badge-gray",
 };
 const LANGS = [
   { code: "en", flag: "🇺🇸", label: "EN" },
@@ -78,31 +87,6 @@ function Section({ title, icon: Icon, children, defaultOpen = true }) {
   );
 }
 
-function StatusPill({ status, onChange }) {
-  return (
-    <div className="flex gap-2">
-      {[
-        { v: "draft",     label: "Draft",        color: "border-surface-300 text-surface-600" },
-        { v: "active",    label: "Active",        color: "border-success-400 text-success-600" },
-        { v: "out_stock", label: "Out of Stock",  color: "border-danger-300 text-danger-500" },
-      ].map(opt => (
-        <button
-          key={opt.v}
-          onClick={() => onChange(opt.v)}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 cursor-pointer transition-all ${
-            status === opt.v
-              ? `${opt.color} bg-white shadow-sm`
-              : "border-surface-100 text-surface-400 bg-surface-50 hover:border-surface-200"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ─── helpers ────────────────────────────────────────────────────────────── */
 function getInitialTrans(translations, locale) {
   const t = (translations || []).find(t => t.locale === locale) || {};
   return {
@@ -113,7 +97,7 @@ function getInitialTrans(translations, locale) {
 }
 
 /* ─── Full-page product editor ───────────────────────────────────────────── */
-function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
+function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
   const isNew = !initial?.id;
   const [productId, setProductId] = useState(initial?.id || null);
   const [images, setImages]       = useState(initial?.images || []);
@@ -171,7 +155,6 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
       } else {
         await onUpdate(pid, payload);
       }
-      // Save HY / RU translations
       if (pid) {
         await Promise.all(
           ["hy", "ru"]
@@ -193,18 +176,23 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
 
   const currentTrans = activeLang !== "en" ? transForm[activeLang] : null;
 
+  const STATUS_PILLS = [
+    { v: "draft",     label: t("products.status_draft"),     color: "border-surface-300 text-surface-600" },
+    { v: "active",    label: t("products.status_active"),    color: "border-success-400 text-success-600" },
+    { v: "out_stock", label: t("products.status_out_stock"), color: "border-danger-300 text-danger-500" },
+  ];
+
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      {/* ── Header bar ── */}
       <div className="bg-white border-b border-surface-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-sm font-medium text-surface-600 hover:text-surface-900 cursor-pointer border-none bg-transparent transition-colors"
         >
-          <ArrowLeft size={15} /> Back to Products
+          <ArrowLeft size={15} /> {t("products.back")}
         </button>
         <h2 className="text-sm font-bold text-surface-900">
-          {isNew ? "New Product" : `Edit: ${initial.name}`}
+          {isNew ? t("products.new_product") : `${t("products.edit_prefix")} ${initial.name}`}
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -212,27 +200,22 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
             disabled={saving || !form.name.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-surface-700 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer disabled:opacity-40 transition-colors"
           >
-            <Save size={14} /> {saving ? "Saving…" : "Save Draft"}
+            <Save size={14} /> {saving ? t("common.saving") : t("common.save_draft")}
           </button>
           <button
             onClick={() => handleSave("active")}
             disabled={saving || !form.name.trim()}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
           >
-            <Send size={14} /> {saved ? "Saved!" : "Publish"}
+            <Send size={14} /> {saved ? t("common.saved") : t("common.publish")}
           </button>
         </div>
       </div>
 
-      {/* ── Two-column layout ── */}
       <div className="flex-1 flex gap-5 p-6 max-w-[1200px] w-full mx-auto">
-
-        {/* Left — form sections */}
         <div className="flex-1 space-y-4 min-w-0">
 
-          {/* Basic info */}
-          <Section title="Basic Information" icon={Package} defaultOpen>
-            {/* Language tabs */}
+          <Section title={t("products.section_basic")} icon={Package} defaultOpen>
             <div className="flex gap-1.5 pt-1">
               {LANGS.map(lang => (
                 <button
@@ -249,40 +232,33 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
               ))}
               {activeLang !== "en" && (
                 <span className="ml-auto text-[11px] text-surface-400 self-center">
-                  Translation — will be saved alongside English
+                  {t("common.translation_note")}
                 </span>
               )}
             </div>
 
-            {/* EN fields */}
             {activeLang === "en" && (
               <>
-                <Inp label="Product Name" required placeholder="e.g. Premium Wedding Cake" value={form.name} onChange={e => set("name", e.target.value)} />
+                <Inp label={t("products.product_name")} required placeholder={t("products.name_placeholder")} value={form.name} onChange={e => set("name", e.target.value)} />
                 <div>
-                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">Description</label>
-                  <RichTextEditor
-                    value={form.description}
-                    onChange={v => set("description", v)}
-                    placeholder="Describe your product in detail…"
-                    minHeight={110}
-                  />
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.description")}</label>
+                  <RichTextEditor value={form.description} onChange={v => set("description", v)} placeholder={t("products.desc_placeholder")} minHeight={110} />
                 </div>
-                <Inp label="Short Description" placeholder="One-liner shown in listings" value={form.short_description} onChange={e => set("short_description", e.target.value)} />
+                <Inp label={t("common.short_description")} placeholder={t("products.short_desc_placeholder")} value={form.short_description} onChange={e => set("short_description", e.target.value)} />
               </>
             )}
 
-            {/* HY / RU translation fields */}
             {activeLang !== "en" && currentTrans && (
               <>
                 <Inp
-                  label={`Product Name (${activeLang.toUpperCase()})`}
+                  label={`${t("products.product_name")} (${activeLang.toUpperCase()})`}
                   placeholder={activeLang === "hy" ? "Ապրանքի անվանում հայերեն" : "Название товара на русском"}
                   value={currentTrans.name}
                   onChange={e => setTrans(activeLang, "name", e.target.value)}
                 />
                 <div>
                   <label className="block text-xs font-semibold text-surface-700 mb-1.5">
-                    Description ({activeLang.toUpperCase()})
+                    {t("common.description")} ({activeLang.toUpperCase()})
                   </label>
                   <RichTextEditor
                     value={currentTrans.description}
@@ -292,7 +268,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
                   />
                 </div>
                 <Inp
-                  label={`Short Description (${activeLang.toUpperCase()})`}
+                  label={`${t("common.short_description")} (${activeLang.toUpperCase()})`}
                   placeholder={activeLang === "hy" ? "Կարճ նկարագրություն" : "Краткое описание"}
                   value={currentTrans.short_description}
                   onChange={e => setTrans(activeLang, "short_description", e.target.value)}
@@ -301,43 +277,41 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
             )}
           </Section>
 
-          {/* Category & Tags */}
-          <Section title="Category & Tags" icon={Tag} defaultOpen>
+          <Section title={t("products.section_cat_tags")} icon={Tag} defaultOpen>
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Category</label>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.category")}</label>
               <select
                 value={form.category_id}
                 onChange={e => set("category_id", e.target.value)}
                 className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer focus:border-primary-400"
               >
-                <option value="">Select category…</option>
+                <option value="">{t("common.select_category")}</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Tags</label>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.tags")}</label>
               <input
                 value={form.tags}
                 onChange={e => set("tags", e.target.value)}
-                placeholder="wedding, cake, custom (comma-separated)"
+                placeholder={t("products.tags_placeholder")}
                 className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none focus:border-primary-400 transition-all"
               />
-              <p className="text-[11px] text-surface-400 mt-1">Separate tags with commas</p>
+              <p className="text-[11px] text-surface-400 mt-1">{t("products.tags_hint")}</p>
             </div>
           </Section>
 
-          {/* Pricing */}
-          <Section title="Pricing & Inventory" icon={DollarSign} defaultOpen>
+          <Section title={t("products.section_pricing")} icon={DollarSign} defaultOpen>
             <div className="grid grid-cols-2 gap-4">
-              <Inp label="Price" required placeholder="0" prefix="AMD" type="number" value={form.price} onChange={e => set("price", e.target.value)} />
-              <Inp label="Compare Price" placeholder="0" prefix="AMD" type="number" value={form.compare_price} onChange={e => set("compare_price", e.target.value)} />
+              <Inp label={t("common.price_label")} required placeholder="0" prefix="AMD" type="number" value={form.price} onChange={e => set("price", e.target.value)} />
+              <Inp label={t("products.compare_price")} placeholder="0" prefix="AMD" type="number" value={form.compare_price} onChange={e => set("compare_price", e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Inp label="SKU" placeholder="e.g. CAKE-001" value={form.sku} onChange={e => set("sku", e.target.value)} />
-              <Inp label="Stock Quantity" placeholder="Leave blank = unlimited" suffix="units" type="number" value={form.stock} onChange={e => set("stock", e.target.value)} />
+              <Inp label={t("products.sku")} placeholder={t("products.sku_placeholder")} value={form.sku} onChange={e => set("sku", e.target.value)} />
+              <Inp label={t("products.stock_qty")} placeholder={t("products.stock_placeholder")} suffix={t("products.stock_units")} type="number" value={form.stock} onChange={e => set("stock", e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Currency</label>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.currency")}</label>
               <select
                 value={form.currency}
                 onChange={e => set("currency", e.target.value)}
@@ -350,79 +324,81 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
               <div className="flex items-center gap-2 p-3 bg-success-50 rounded-xl border border-success-100">
                 <div className="w-1.5 h-1.5 rounded-full bg-success-500" />
                 <p className="text-xs text-success-700 font-medium">
-                  {Math.round((1 - parseFloat(form.price) / parseFloat(form.compare_price)) * 100)}% discount badge will show on listing
+                  {Math.round((1 - parseFloat(form.price) / parseFloat(form.compare_price)) * 100)}{t("products.discount_note")}
                 </p>
               </div>
             )}
           </Section>
         </div>
 
-        {/* Right — sticky sidebar */}
         <div className="w-[320px] flex-shrink-0 space-y-4">
-
-          {/* Status */}
           <div className="bg-white rounded-2xl border border-surface-200 p-4">
-            <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Visibility</p>
-            <StatusPill status={form.status} onChange={v => set("status", v)} />
+            <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">{t("common.visibility")}</p>
+            <div className="flex gap-2">
+              {STATUS_PILLS.map(opt => (
+                <button
+                  key={opt.v}
+                  onClick={() => set("status", opt.v)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 cursor-pointer transition-all ${
+                    form.status === opt.v
+                      ? `${opt.color} bg-white shadow-sm`
+                      : "border-surface-100 text-surface-400 bg-surface-50 hover:border-surface-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <div className="mt-4 space-y-2">
               <button
                 onClick={() => handleSave("active")}
                 disabled={saving || !form.name.trim()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
               >
-                <Send size={14} /> {saving ? "Saving…" : saved ? "Saved!" : "Save & Publish"}
+                <Send size={14} /> {saving ? t("common.saving") : saved ? t("common.saved") : t("common.save_publish")}
               </button>
               <button
                 onClick={() => handleSave("draft")}
                 disabled={saving || !form.name.trim()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-surface-50 text-surface-700 text-sm font-semibold rounded-xl border border-surface-200 hover:bg-surface-100 cursor-pointer disabled:opacity-40 transition-colors"
               >
-                <Save size={14} /> Save as Draft
+                <Save size={14} /> {t("common.save_draft")}
               </button>
             </div>
           </div>
 
-          {/* Images */}
           <div className="bg-white rounded-2xl border border-surface-200 p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">Images</p>
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">{t("common.images")}</p>
               {images.length > 0 && (
-                <span className="text-[11px] text-surface-400">{images.length} uploaded</span>
+                <span className="text-[11px] text-surface-400">{images.length} {t("common.uploaded")}</span>
               )}
             </div>
             {!productId && (
               <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                <p className="text-[11px] text-amber-700 font-medium">
-                  Save the product first to unlock image upload
-                </p>
+                <p className="text-[11px] text-amber-700 font-medium">{t("products.save_first")}</p>
               </div>
             )}
-            <ImageManager
-              entityId={productId}
-              type="product"
-              images={images}
-              onChange={setImages}
-            />
+            <ImageManager entityId={productId} type="product" images={images} onChange={setImages} />
           </div>
 
-          {/* Summary */}
           {(form.name || form.price) && (
             <div className="bg-surface-50 rounded-2xl border border-surface-200 p-4">
-              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Summary</p>
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">{t("common.summary")}</p>
               <div className="space-y-2 text-xs text-surface-600">
-                {form.name && <div className="flex justify-between"><span className="text-surface-400">Name</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
-                {form.price && <div className="flex justify-between"><span className="text-surface-400">Price</span><span className="font-medium">{form.currency} {parseFloat(form.price).toLocaleString()}</span></div>}
-                {form.sku && <div className="flex justify-between"><span className="text-surface-400">SKU</span><span className="font-medium">{form.sku}</span></div>}
-                <div className="flex justify-between"><span className="text-surface-400">Images</span><span className="font-medium">{images.length}</span></div>
+                {form.name && <div className="flex justify-between"><span className="text-surface-400">{t("common.name_label")}</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
+                {form.price && <div className="flex justify-between"><span className="text-surface-400">{t("common.price_label")}</span><span className="font-medium">{form.currency} {parseFloat(form.price).toLocaleString()}</span></div>}
+                {form.sku && <div className="flex justify-between"><span className="text-surface-400">{t("products.sku")}</span><span className="font-medium">{form.sku}</span></div>}
+                <div className="flex justify-between"><span className="text-surface-400">{t("common.images")}</span><span className="font-medium">{images.length}</span></div>
                 <div className="flex justify-between">
-                  <span className="text-surface-400">Languages</span>
+                  <span className="text-surface-400">{t("common.languages")}</span>
                   <span className="font-medium text-primary-600">
                     EN{transForm.hy?.name ? " · HY" : ""}{transForm.ru?.name ? " · RU" : ""}
                   </span>
                 </div>
-                <div className="flex justify-between"><span className="text-surface-400">Status</span>
+                <div className="flex justify-between"><span className="text-surface-400">{t("common.status")}</span>
                   <span className={`font-bold ${form.status === "active" ? "text-success-600" : form.status === "out_stock" ? "text-danger-500" : "text-surface-500"}`}>
-                    {form.status.replace("_", " ")}
+                    {form.status === "active" ? t("products.status_active") : form.status === "out_stock" ? t("products.status_out_stock") : t("products.status_draft")}
                   </span>
                 </div>
               </div>
@@ -436,23 +412,23 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate }) {
 
 /* ─── Main list page ─────────────────────────────────────────────────────── */
 export default function VendorProducts() {
+  const { t, locale } = useLocale();
   const searchParams = useSearchParams();
-  const [view, setView]             = useState("grid");
-  const [mode, setMode]             = useState("list"); // "list" | "create" | "edit"
+  const [view, setView]               = useState("grid");
+  const [mode, setMode]               = useState("list");
   const [editProduct, setEditProduct] = useState(null);
-  const [products, setProducts]     = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [filterCat, setFilterCat]   = useState("");
+  const [products, setProducts]       = useState([]);
+  const [categories, setCategories]   = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [filterCat, setFilterCat]     = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
   const fetchProducts = useCallback(() => {
-    return vendorAPI.products({ limit: 100 })
+    return vendorAPI.products({ limit: 100, locale })
       .then(res => { setProducts(res?.data || []); setLoading(false); return res?.data || []; })
       .catch(() => { setLoading(false); return []; });
-  }, []);
+  }, [locale]);
 
-  // Fetch full product (with images + translations) then open editor
   const openEdit = useCallback(async (productOrId) => {
     const id = typeof productOrId === "string" ? productOrId : productOrId?.id;
     if (!id) return;
@@ -467,72 +443,23 @@ export default function VendorProducts() {
 
   useEffect(() => {
     const editId = searchParams?.get("edit");
-    fetchProducts().then(list => {
-      if (editId) openEdit(editId);
-    });
+    fetchProducts().then(list => { if (editId) openEdit(editId); });
     adminCategoriesAPI.list().then(res => setCategories(res?.data || [])).catch(() => {});
-  }, []);
+  }, [locale]);
 
-  const handleCreate = async (data) => {
-    const res = await vendorAPI.createProduct(data);
-    fetchProducts();
-    return res;
-  };
-
-  const handleUpdate = async (id, data) => {
-    await vendorAPI.updateProduct(id, data);
-    fetchProducts();
-  };
-
-  const handleDelete = async (id) => {
+  const handleCreate   = async (data) => { const res = await vendorAPI.createProduct(data); fetchProducts(); return res; };
+  const handleUpdate   = async (id, data) => { await vendorAPI.updateProduct(id, data); fetchProducts(); };
+  const handleDelete   = async (id) => {
     if (!confirm("Delete this product?")) return;
-    try {
-      await vendorAPI.deleteProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
-    } catch (e) { console.error(e); }
+    try { await vendorAPI.deleteProduct(id); setProducts(prev => prev.filter(p => p.id !== id)); } catch (e) { console.error(e); }
   };
-
-  const handlePublish = async (id) => {
-    try {
-      await vendorAPI.publishProduct(id);
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, status: "active" } : p));
-    } catch (e) { console.error(e); }
-  };
-
-  const handleUnpublish = async (id) => {
-    try {
-      await vendorAPI.unpublishProduct(id);
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, status: "draft" } : p));
-    } catch (e) { console.error(e); }
-  };
-
+  const handlePublish  = async (id) => { try { await vendorAPI.publishProduct(id);   setProducts(prev => prev.map(p => p.id === id ? { ...p, status: "active" } : p)); } catch (e) { console.error(e); } };
+  const handleUnpublish= async (id) => { try { await vendorAPI.unpublishProduct(id); setProducts(prev => prev.map(p => p.id === id ? { ...p, status: "draft" }  : p)); } catch (e) { console.error(e); } };
   const goBack = () => { setMode("list"); setEditProduct(null); fetchProducts(); };
 
-  // ── Editor mode ──
-  if (mode === "create") {
-    return (
-      <ProductEditor
-        initial={null}
-        categories={categories}
-        onBack={goBack}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-      />
-    );
-  }
-  if (mode === "edit" && editProduct) {
-    return (
-      <ProductEditor
-        initial={editProduct}
-        categories={categories}
-        onBack={goBack}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-      />
-    );
-  }
+  if (mode === "create") return <ProductEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
+  if (mode === "edit" && editProduct) return <ProductEditor initial={editProduct} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
 
-  // ── List mode ──
   const filtered = products.filter(p => {
     if (filterCat && p.category_id !== filterCat) return false;
     if (filterStatus && p.status !== filterStatus) return false;
@@ -540,37 +467,38 @@ export default function VendorProducts() {
   });
 
   const listColumns = [
-    { key: "name", label: "Product", sortable: true, render: (val, row) => (
+    { key: "name", label: t("products.product_name"), sortable: true, render: (val, row) => (
       <div className="flex items-center gap-3">
         {row.images?.[0]?.url || row.thumbnail_url
           ? <img src={row.images?.[0]?.url || row.thumbnail_url} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
           : <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${GRADIENTS[0]} flex-shrink-0`} />
         }
-        <span className="font-medium text-surface-800">{val}</span>
+        <span className="font-medium text-surface-800">{getLocName(row, locale)}</span>
       </div>
     )},
-    { key: "category_name", label: "Category", sortable: true, render: v => v || "—" },
-    { key: "price", label: "Price", render: (v, row) => `${row.currency || "AMD"} ${v}` },
-    { key: "stock_qty", label: "Stock", render: v => (
+    { key: "category_name", label: t("common.category"), sortable: true, render: v => v || "—" },
+    { key: "price", label: t("common.price_label"), render: (v, row) => `${row.currency || "AMD"} ${v}` },
+    { key: "stock_qty", label: t("products.stock_qty"), render: v => (
       <span className={v === 0 ? "text-danger-600 font-semibold" : "text-surface-700"}>
-        {v === 0 ? "Out of stock" : v ?? "—"}
+        {v === 0 ? t("common.out_of_stock") : v ?? "—"}
       </span>
     )},
-    { key: "status", label: "Status", render: v => (
-      <span className={STATUS_BADGE[v] || "badge badge-gray"}>{v?.replace("_", " ")}</span>
+    { key: "status", label: t("common.status"), render: v => (
+      <span className={STATUS_BADGE[v] || "badge badge-gray"}>
+        {v === "active" ? t("products.status_active") : v === "out_stock" ? t("products.status_out_stock") : t("products.status_draft")}
+      </span>
     )},
-    { key: "id", label: "Actions", render: (id, row) => (
+    { key: "id", label: t("common.actions"), render: (id, row) => (
       <div className="flex gap-1.5">
-        <button onClick={() => openEdit(row)}
-          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 cursor-pointer border-none">
-          <Pencil size={12} /> Edit
+        <button onClick={() => openEdit(row)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 cursor-pointer border-none">
+          <Pencil size={12} /> {t("common.edit")}
         </button>
         {row.status !== "active"
-          ? <button onClick={() => handlePublish(id)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-success-600 bg-success-50 rounded-lg hover:bg-success-100 cursor-pointer border-none"><Eye size={12} /> Publish</button>
-          : <button onClick={() => handleUnpublish(id)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-warning-600 bg-warning-50 rounded-lg hover:bg-yellow-100 cursor-pointer border-none"><EyeOff size={12} /> Unpublish</button>
+          ? <button onClick={() => handlePublish(id)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-success-600 bg-success-50 rounded-lg hover:bg-success-100 cursor-pointer border-none"><Eye size={12} /> {t("common.publish")}</button>
+          : <button onClick={() => handleUnpublish(id)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-warning-600 bg-warning-50 rounded-lg hover:bg-yellow-100 cursor-pointer border-none"><EyeOff size={12} /> {t("common.unpublish")}</button>
         }
         <button onClick={() => handleDelete(id)} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-danger-600 bg-danger-50 rounded-lg hover:bg-red-100 cursor-pointer border-none">
-          <Trash2 size={12} /> Delete
+          <Trash2 size={12} /> {t("common.delete")}
         </button>
       </div>
     )},
@@ -579,8 +507,8 @@ export default function VendorProducts() {
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
       <TopBar
-        title="My Products"
-        subtitle={loading ? "Loading…" : `${filtered.length} of ${products.length} products`}
+        title={t("products.title")}
+        subtitle={loading ? t("common.loading") : `${filtered.length} of ${products.length} products`}
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center bg-white border border-surface-200 rounded-lg overflow-hidden">
@@ -588,36 +516,35 @@ export default function VendorProducts() {
               <button onClick={() => setView("list")} className={`w-8 h-8 flex items-center justify-center cursor-pointer border-none transition-colors ${view === "list" ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-50"}`}><List size={15} /></button>
             </div>
             <button onClick={() => setMode("create")} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none transition-colors">
-              <Plus size={15} /> Add Product
+              <Plus size={15} /> {t("products.add_product")}
             </button>
           </div>
         }
       />
 
-      {/* Filters */}
       <div className="px-6 pt-4 pb-2 flex items-center gap-3">
         <Filter size={14} className="text-surface-400" />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
-          <option value="">All Categories</option>
+          <option value="">{t("products.all_categories")}</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="draft">Draft</option>
-          <option value="out_stock">Out of Stock</option>
+          <option value="">{t("products.all_statuses")}</option>
+          <option value="active">{t("products.status_active")}</option>
+          <option value="draft">{t("products.status_draft")}</option>
+          <option value="out_stock">{t("products.status_out_stock")}</option>
         </select>
         {(filterCat || filterStatus) && (
           <button onClick={() => { setFilterCat(""); setFilterStatus(""); }}
-            className="text-xs text-primary-600 hover:underline cursor-pointer border-none bg-transparent">Clear</button>
+            className="text-xs text-primary-600 hover:underline cursor-pointer border-none bg-transparent">{t("common.clear")}</button>
         )}
       </div>
 
       <div className="flex-1 p-6">
         {loading ? (
-          <div className="py-16 text-center text-sm text-surface-400">Loading products…</div>
+          <div className="py-16 text-center text-sm text-surface-400">{t("products.loading")}</div>
         ) : view === "grid" ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filtered.map((p, i) => {
@@ -628,26 +555,22 @@ export default function VendorProducts() {
                     {thumb && <img src={thumb} alt={p.name} className="w-full h-full object-cover" />}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                      <button onClick={() => openEdit(p)}
-                        className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none">
-                        <Pencil size={12} className="text-primary-600" />
-                      </button>
-                      <button onClick={() => handleDelete(p.id)}
-                        className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none">
-                        <Trash2 size={12} className="text-danger-500" />
-                      </button>
+                      <button onClick={() => openEdit(p)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Pencil size={12} className="text-primary-600" /></button>
+                      <button onClick={() => handleDelete(p.id)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Trash2 size={12} className="text-danger-500" /></button>
                     </div>
-                    <span className={`absolute top-2 left-2 badge ${STATUS_BADGE[p.status] || "badge-gray"} text-[10px]`}>{p.status?.replace("_", " ")}</span>
+                    <span className={`absolute top-2 left-2 badge ${STATUS_BADGE[p.status] || "badge-gray"} text-[10px]`}>
+                      {p.status === "active" ? t("products.status_active") : p.status === "out_stock" ? t("products.status_out_stock") : t("products.status_draft")}
+                    </span>
                     <div className="absolute bottom-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                       {p.status !== "active"
-                        ? <button onClick={() => handlePublish(p.id)} className="px-2 py-1 text-[10px] font-bold bg-primary-600 text-white rounded-lg hover:bg-primary-700 cursor-pointer border-none">Publish</button>
-                        : <button onClick={() => handleUnpublish(p.id)} className="px-2 py-1 text-[10px] font-bold bg-white text-surface-600 rounded-lg border border-surface-200 hover:bg-surface-100 cursor-pointer">Unpublish</button>
+                        ? <button onClick={() => handlePublish(p.id)} className="px-2 py-1 text-[10px] font-bold bg-primary-600 text-white rounded-lg hover:bg-primary-700 cursor-pointer border-none">{t("common.publish")}</button>
+                        : <button onClick={() => handleUnpublish(p.id)} className="px-2 py-1 text-[10px] font-bold bg-white text-surface-600 rounded-lg border border-surface-200 hover:bg-surface-100 cursor-pointer">{t("common.unpublish")}</button>
                       }
                     </div>
                   </div>
                   <div className="p-3">
                     <p className="text-xs text-surface-400 mb-0.5">{p.category_name || "—"}</p>
-                    <p className="text-sm font-semibold text-surface-800 line-clamp-2 leading-snug mb-2">{p.name}</p>
+                    <p className="text-sm font-semibold text-surface-800 line-clamp-2 leading-snug mb-2">{getLocName(p, locale)}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-base font-bold text-surface-900">{p.currency || "AMD"} {p.price}</span>
                       {(p.images?.length > 0 || p.thumbnail_url) && (
@@ -655,17 +578,16 @@ export default function VendorProducts() {
                       )}
                     </div>
                     <p className={`text-xs font-medium mt-1.5 ${p.stock_qty === 0 ? "text-danger-500" : "text-surface-500"}`}>
-                      {p.stock_qty === 0 ? "Out of stock" : p.stock_qty != null ? `${p.stock_qty} in stock` : "Unlimited"}
+                      {p.stock_qty === 0 ? t("common.out_of_stock") : p.stock_qty != null ? `${p.stock_qty} ${t("products.in_stock_suffix")}` : t("common.unlimited")}
                     </p>
                   </div>
                 </div>
               );
             })}
-            {/* Add tile */}
             <button onClick={() => setMode("create")}
               className="border-2 border-dashed border-surface-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer bg-transparent h-[220px]">
               <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center"><Plus size={20} className="text-surface-400" /></div>
-              <p className="text-sm font-medium text-surface-400">Add Product</p>
+              <p className="text-sm font-medium text-surface-400">{t("products.add_product")}</p>
             </button>
           </div>
         ) : (

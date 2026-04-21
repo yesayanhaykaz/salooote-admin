@@ -8,20 +8,29 @@ import {
 import TopBar from "@/components/TopBar";
 import StatsCard from "@/components/StatsCard";
 import { vendorAPI } from "@/lib/api";
+import { useLocale } from "@/lib/i18n";
 
-const STATUS_CONFIG = {
-  new:       { label: "New",       cls: "badge badge-info",    dot: "bg-info-500" },
-  replied:   { label: "Replied",   cls: "badge badge-gray",    dot: "bg-surface-400" },
-  confirmed: { label: "Confirmed", cls: "badge badge-success", dot: "bg-success-500" },
-  pending:   { label: "Pending",   cls: "badge badge-warning", dot: "bg-warning-500" },
-  cancelled: { label: "Cancelled", cls: "badge badge-danger",  dot: "bg-danger-500" },
+const STATUS_CLS = {
+  new:       { cls: "badge badge-info",    dot: "bg-info-500" },
+  replied:   { cls: "badge badge-gray",    dot: "bg-surface-400" },
+  confirmed: { cls: "badge badge-success", dot: "bg-success-500" },
+  pending:   { cls: "badge badge-warning", dot: "bg-warning-500" },
+  cancelled: { cls: "badge badge-danger",  dot: "bg-danger-500" },
+};
+
+const STATUS_LABEL_KEYS = {
+  new:       "inquiries.status_new",
+  replied:   "inquiries.replied",
+  confirmed: "inquiries.confirmed",
+  pending:   "inquiries.pending",
+  cancelled: "inquiries.status_cancelled",
 };
 
 const EVENT_COLORS = {
-  Wedding:     "bg-pink-50 text-pink-600",
-  Birthday:    "bg-blue-50 text-blue-600",
-  Christening: "bg-purple-50 text-purple-600",
-  "Office Event": "bg-orange-50 text-orange-600",
+  Wedding:       "bg-pink-50 text-pink-600",
+  Birthday:      "bg-blue-50 text-blue-600",
+  Christening:   "bg-purple-50 text-purple-600",
+  "Office Event":"bg-orange-50 text-orange-600",
 };
 
 function Avatar({ initial, size = "md", color = "bg-primary-600" }) {
@@ -37,8 +46,7 @@ const AVATAR_COLORS = ["bg-primary-600", "bg-pink-500", "bg-blue-500", "bg-green
 
 function fmtDate(iso) {
   if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function fmtBudget(budget, currency) {
@@ -47,6 +55,7 @@ function fmtBudget(budget, currency) {
 }
 
 export default function VendorInquiries() {
+  const { t } = useLocale();
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -67,6 +76,7 @@ export default function VendorInquiries() {
   }, []);
 
   const getStatus = (inq) => statusMap[inq.id] || inq.status;
+  const getStatusLabel = (status) => t(STATUS_LABEL_KEYS[status] || "inquiries.status_new");
 
   const counts = {
     total:     inquiries.length,
@@ -91,7 +101,7 @@ export default function VendorInquiries() {
     if (!noteText.trim() || !selected) return;
     setNotes(prev => ({
       ...prev,
-      [selected.id]: [...(prev[selected.id] || []), { text: noteText, time: "Just now" }],
+      [selected.id]: [...(prev[selected.id] || []), { text: noteText, time: t("common.loading").replace("…", "") || "Now" }],
     }));
     setNoteText("");
   };
@@ -106,9 +116,9 @@ export default function VendorInquiries() {
   if (loading) {
     return (
       <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-        <TopBar title="Inquiries" subtitle="Manage client inquiries and requests" />
+        <TopBar title={t("inquiries.title")} subtitle={t("inquiries.subtitle")} />
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-sm text-surface-400">Loading inquiries…</div>
+          <div className="text-sm text-surface-400">{t("common.loading")}</div>
         </div>
       </div>
     );
@@ -116,40 +126,40 @@ export default function VendorInquiries() {
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar title="Inquiries" subtitle="Manage client inquiries and requests" />
+      <TopBar title={t("inquiries.title")} subtitle={t("inquiries.subtitle")} />
 
       <main className="flex-1 p-6 space-y-5 overflow-hidden">
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: "Total Inquiries", value: counts.total,     icon: Inbox,         iconBg: "bg-primary-50",  iconColor: "text-primary-600" },
-            { label: "New (Unread)",    value: counts.new,        icon: AlertCircle,   iconBg: "bg-info-50",     iconColor: "text-info-600" },
-            { label: "Replied",         value: counts.replied,    icon: Send,          iconBg: "bg-surface-100", iconColor: "text-surface-500" },
-            { label: "Confirmed",       value: counts.confirmed,  icon: CalendarCheck, iconBg: "bg-success-50",  iconColor: "text-success-600" },
-            { label: "Pending",         value: counts.pending,    icon: Clock,         iconBg: "bg-warning-50",  iconColor: "text-warning-600" },
+            { labelKey: "inquiries.total_inquiries", value: counts.total,     icon: Inbox,         iconBg: "bg-primary-50",  iconColor: "text-primary-600" },
+            { labelKey: "inquiries.new_unread",       value: counts.new,       icon: AlertCircle,   iconBg: "bg-info-50",     iconColor: "text-info-600" },
+            { labelKey: "inquiries.replied",          value: counts.replied,   icon: Send,          iconBg: "bg-surface-100", iconColor: "text-surface-500" },
+            { labelKey: "inquiries.confirmed",        value: counts.confirmed, icon: CalendarCheck, iconBg: "bg-success-50",  iconColor: "text-success-600" },
+            { labelKey: "inquiries.pending",          value: counts.pending,   icon: Clock,         iconBg: "bg-warning-50",  iconColor: "text-warning-600" },
           ].map(s => (
-            <StatsCard key={s.label} label={s.label} value={String(s.value)} icon={s.icon} iconBg={s.iconBg} iconColor={s.iconColor} />
+            <StatsCard key={s.labelKey} label={t(s.labelKey)} value={String(s.value)} icon={s.icon} iconBg={s.iconBg} iconColor={s.iconColor} />
           ))}
         </div>
 
         {/* Two-column layout */}
         <div className="flex gap-5 h-[calc(100vh-280px)] min-h-[520px]">
-          {/* Left: Inquiry List (40%) */}
+          {/* Left: Inquiry List */}
           <div className="w-[40%] flex-shrink-0 bg-white rounded-xl border border-surface-200 flex flex-col overflow-hidden">
             <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between flex-shrink-0">
-              <h2 className="text-sm font-semibold text-surface-900">All Inquiries</h2>
-              <span className="text-xs text-surface-400">{inquiries.length} total</span>
+              <h2 className="text-sm font-semibold text-surface-900">{t("inquiries.all_inquiries")}</h2>
+              <span className="text-xs text-surface-400">{inquiries.length} {t("inquiries.total_label")}</span>
             </div>
             <div className="overflow-y-auto flex-1">
               {inquiries.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <Inbox size={28} className="text-surface-200 mb-2" />
-                  <p className="text-sm text-surface-400">No inquiries yet</p>
+                  <p className="text-sm text-surface-400">{t("inquiries.empty_title")}</p>
                 </div>
               )}
               {inquiries.map((inq, idx) => {
                 const status = getStatus(inq);
-                const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.new;
+                const cfg = STATUS_CLS[status] || STATUS_CLS.new;
                 const isSelected = selected?.id === inq.id;
                 const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length];
                 const isNew = status === "new";
@@ -185,9 +195,9 @@ export default function VendorInquiries() {
                         <p className="text-[11px] text-surface-500 font-medium truncate mb-1">{inq.subject}</p>
                         <p className="text-[11px] text-surface-400 truncate leading-relaxed">{inq.message}</p>
                         <div className="flex items-center justify-between mt-1.5">
-                          <span className={cfg.cls}>{cfg.label}</span>
+                          <span className={cfg.cls}>{getStatusLabel(status)}</span>
                           {isNew && (
-                            <span className="text-[10px] font-bold text-info-600 bg-info-50 px-1.5 py-0.5 rounded-full">NEW</span>
+                            <span className="text-[10px] font-bold text-info-600 bg-info-50 px-1.5 py-0.5 rounded-full">{t("inquiries.new_badge")}</span>
                           )}
                         </div>
                       </div>
@@ -198,7 +208,7 @@ export default function VendorInquiries() {
             </div>
           </div>
 
-          {/* Right: Detail Panel (60%) */}
+          {/* Right: Detail Panel */}
           <div className="flex-1 bg-white rounded-xl border border-surface-200 flex flex-col overflow-hidden">
             {selected ? (
               <>
@@ -225,8 +235,8 @@ export default function VendorInquiries() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-surface-400">{selected.id?.slice(0, 8)}</span>
-                      <span className={(STATUS_CONFIG[getStatus(selected)] || STATUS_CONFIG.new).cls}>
-                        {(STATUS_CONFIG[getStatus(selected)] || STATUS_CONFIG.new).label}
+                      <span className={(STATUS_CLS[getStatus(selected)] || STATUS_CLS.new).cls}>
+                        {getStatusLabel(getStatus(selected))}
                       </span>
                     </div>
                   </div>
@@ -236,59 +246,58 @@ export default function VendorInquiries() {
                 <div className="flex-1 overflow-y-auto">
                   {/* Inquiry Details */}
                   <div className="px-5 py-4 border-b border-surface-100">
-                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Inquiry Details</h4>
+                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{t("inquiries.detail_section")}</h4>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       {[
-                        { icon: MessageSquare, label: "Subject",    value: selected.subject || "—" },
-                        { icon: Calendar,      label: "Event Date", value: fmtDate(selected.event_date) || "—" },
-                        { icon: Users,         label: "Guests",     value: selected.guest_count ? `${selected.guest_count} guests` : "—" },
-                        { icon: DollarSign,    label: "Budget",     value: fmtBudget(selected.budget, selected.currency) },
-                      ].map(({ icon: Icon, label, value }) => (
-                        <div key={label} className="flex items-start gap-2">
+                        { icon: MessageSquare, labelKey: "inquiries.field_subject",    value: selected.subject || "—" },
+                        { icon: Calendar,      labelKey: "inquiries.field_event_date", value: fmtDate(selected.event_date) || "—" },
+                        { icon: Users,         labelKey: "inquiries.field_guests",     value: selected.guest_count ? `${selected.guest_count} ${t("inquiries.field_guests_suffix")}` : "—" },
+                        { icon: DollarSign,    labelKey: "inquiries.field_budget",     value: fmtBudget(selected.budget, selected.currency) },
+                      ].map(({ icon: Icon, labelKey, value }) => (
+                        <div key={labelKey} className="flex items-start gap-2">
                           <div className="w-7 h-7 bg-surface-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                             <Icon size={13} className="text-surface-500" />
                           </div>
                           <div>
-                            <p className="text-[10px] text-surface-400 font-medium uppercase tracking-wide">{label}</p>
+                            <p className="text-[10px] text-surface-400 font-medium uppercase tracking-wide">{t(labelKey)}</p>
                             <p className="text-xs text-surface-800 font-semibold">{value}</p>
                           </div>
                         </div>
                       ))}
                     </div>
-                    {/* Message */}
                     <div className="bg-surface-50 rounded-xl p-3.5 border border-surface-100">
-                      <p className="text-[10px] text-surface-400 font-medium uppercase tracking-wide mb-1.5">Client Message</p>
+                      <p className="text-[10px] text-surface-400 font-medium uppercase tracking-wide mb-1.5">{t("inquiries.client_message")}</p>
                       <p className="text-xs text-surface-700 leading-relaxed">{selected.message}</p>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
                   <div className="px-5 py-4 border-b border-surface-100">
-                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Actions</h4>
+                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{t("common.actions")}</h4>
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => handleStatusChange(selected.id, "replied")}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
                       >
-                        <Send size={13} /> Reply
+                        <Send size={13} /> {t("inquiries.action_reply")}
                       </button>
                       <button
                         onClick={() => handleStatusChange(selected.id, "pending")}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-warning-50 text-warning-600 text-xs font-semibold rounded-lg hover:bg-warning-100 transition-colors cursor-pointer border border-warning-200"
                       >
-                        <DollarSign size={13} /> Send Offer
+                        <DollarSign size={13} /> {t("inquiries.action_send_offer")}
                       </button>
                       <button
                         onClick={() => handleStatusChange(selected.id, "confirmed")}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-success-50 text-success-600 text-xs font-semibold rounded-lg hover:bg-success-100 transition-colors cursor-pointer border border-success-200"
                       >
-                        <CalendarCheck size={13} /> Confirm Booking
+                        <CalendarCheck size={13} /> {t("inquiries.action_confirm_booking")}
                       </button>
                       <button
                         onClick={() => handleStatusChange(selected.id, "cancelled")}
                         className="flex items-center gap-1.5 px-3.5 py-2 bg-danger-50 text-danger-600 text-xs font-semibold rounded-lg hover:bg-danger-100 transition-colors cursor-pointer border border-danger-200"
                       >
-                        <X size={13} /> Decline
+                        <X size={13} /> {t("inquiries.action_decline")}
                       </button>
                     </div>
                   </div>
@@ -296,15 +305,15 @@ export default function VendorInquiries() {
                   {/* Status Update */}
                   <div className="px-5 py-4 border-b border-surface-100">
                     <div className="flex items-center gap-3">
-                      <label className="text-xs font-semibold text-surface-600 whitespace-nowrap">Update Status:</label>
+                      <label className="text-xs font-semibold text-surface-600 whitespace-nowrap">{t("inquiries.update_status")}:</label>
                       <div className="relative">
                         <select
                           value={getStatus(selected)}
                           onChange={e => handleStatusChange(selected.id, e.target.value)}
                           className="appearance-none text-xs font-medium border border-surface-200 rounded-lg px-3 py-2 pr-7 bg-white text-surface-700 cursor-pointer"
                         >
-                          {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                            <option key={k} value={k}>{v.label}</option>
+                          {Object.keys(STATUS_CLS).map(k => (
+                            <option key={k} value={k}>{getStatusLabel(k)}</option>
                           ))}
                         </select>
                         <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
@@ -314,31 +323,31 @@ export default function VendorInquiries() {
 
                   {/* Reply Composer */}
                   <div className="px-5 py-4 border-b border-surface-100">
-                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Reply to Client</h4>
+                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{t("inquiries.reply_to_client")}</h4>
                     <textarea
                       value={replyText}
                       onChange={e => setReplyText(e.target.value)}
-                      placeholder="Type your reply here..."
+                      placeholder={t("inquiries.reply_placeholder")}
                       rows={4}
                       className="w-full text-xs text-surface-700 border border-surface-200 rounded-xl p-3 resize-none bg-surface-50 placeholder:text-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition"
                     />
                     <div className="flex items-center justify-between mt-2">
                       <button className="flex items-center gap-1.5 text-xs text-surface-500 hover:text-surface-700 transition-colors cursor-pointer border-none bg-transparent">
-                        <Paperclip size={13} /> Attach file
+                        <Paperclip size={13} /> {t("inquiries.attach_file")}
                       </button>
                       <button
                         onClick={handleSendReply}
                         disabled={!replyText.trim()}
                         className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer border-none"
                       >
-                        <Send size={12} /> Send Reply
+                        <Send size={12} /> {t("inquiries.send_reply")}
                       </button>
                     </div>
                   </div>
 
                   {/* Internal Notes */}
                   <div className="px-5 py-4">
-                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Internal Notes</h4>
+                    <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{t("inquiries.internal_notes")}</h4>
                     {(notes[selected.id] || []).length > 0 && (
                       <div className="mb-3 space-y-2">
                         {(notes[selected.id] || []).map((note, i) => (
@@ -352,7 +361,7 @@ export default function VendorInquiries() {
                     <textarea
                       value={noteText}
                       onChange={e => setNoteText(e.target.value)}
-                      placeholder="Add internal note (not visible to client)..."
+                      placeholder={t("inquiries.note_placeholder")}
                       rows={2}
                       className="w-full text-xs text-surface-700 border border-surface-200 rounded-xl p-3 resize-none bg-surface-50 placeholder:text-surface-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 transition"
                     />
@@ -362,7 +371,7 @@ export default function VendorInquiries() {
                         disabled={!noteText.trim()}
                         className="px-3.5 py-1.5 bg-surface-100 text-surface-600 text-xs font-semibold rounded-lg hover:bg-surface-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer border-none"
                       >
-                        Save Note
+                        {t("inquiries.save_note")}
                       </button>
                     </div>
                   </div>
@@ -373,8 +382,8 @@ export default function VendorInquiries() {
                 <div className="w-14 h-14 bg-surface-100 rounded-full flex items-center justify-center mb-3">
                   <Inbox size={24} className="text-surface-400" />
                 </div>
-                <p className="text-sm font-semibold text-surface-600">No inquiries yet</p>
-                <p className="text-xs text-surface-400 mt-1">Inquiries from clients will appear here</p>
+                <p className="text-sm font-semibold text-surface-600">{t("inquiries.empty_title")}</p>
+                <p className="text-xs text-surface-400 mt-1">{t("inquiries.empty_text")}</p>
               </div>
             )}
           </div>
