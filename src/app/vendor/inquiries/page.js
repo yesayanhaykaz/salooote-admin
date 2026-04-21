@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Inbox, Send, CalendarCheck, X, ChevronDown, Paperclip,
   User, MapPin, Users, DollarSign, Calendar, MessageSquare,
@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import StatsCard from "@/components/StatsCard";
-import { SAMPLE_INQUIRIES } from "@/lib/data";
+import { vendorAPI } from "@/lib/api";
 
 const STATUS_CONFIG = {
   new:       { label: "New",       cls: "badge badge-info",    dot: "bg-info-500" },
@@ -35,26 +35,50 @@ function Avatar({ initial, size = "md", color = "bg-primary-600" }) {
 
 const AVATAR_COLORS = ["bg-primary-600", "bg-pink-500", "bg-blue-500", "bg-green-500", "bg-orange-500"];
 
+function fmtDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function fmtBudget(budget, currency) {
+  if (!budget) return "—";
+  return `${currency || "AMD"} ${Number(budget).toLocaleString()}`;
+}
+
 export default function VendorInquiries() {
-  const [selected, setSelected] = useState(SAMPLE_INQUIRIES[0]);
+  const [inquiries, setInquiries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [statusMap, setStatusMap] = useState({});
   const [noteText, setNoteText] = useState("");
   const [notes, setNotes] = useState({});
 
+  useEffect(() => {
+    vendorAPI.inquiries({ limit: 50 })
+      .then(res => {
+        const list = res?.data || [];
+        setInquiries(list);
+        if (list.length > 0) setSelected(list[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   const getStatus = (inq) => statusMap[inq.id] || inq.status;
 
   const counts = {
-    total:     SAMPLE_INQUIRIES.length,
-    new:       SAMPLE_INQUIRIES.filter(i => getStatus(i) === "new").length,
-    replied:   SAMPLE_INQUIRIES.filter(i => getStatus(i) === "replied").length,
-    confirmed: SAMPLE_INQUIRIES.filter(i => getStatus(i) === "confirmed").length,
-    pending:   SAMPLE_INQUIRIES.filter(i => getStatus(i) === "pending").length,
+    total:     inquiries.length,
+    new:       inquiries.filter(i => getStatus(i) === "new").length,
+    replied:   inquiries.filter(i => getStatus(i) === "replied").length,
+    confirmed: inquiries.filter(i => getStatus(i) === "confirmed").length,
+    pending:   inquiries.filter(i => getStatus(i) === "pending").length,
   };
 
-  const handleStatusChange = (id, status) => {
+  const handleStatusChange = async (id, status) => {
     setStatusMap(prev => ({ ...prev, [id]: status }));
-    if (selected?.id === id) setSelected(prev => ({ ...prev, _status: status }));
+    try { await vendorAPI.updateInquiryStatus(id, status); } catch {}
   };
 
   const handleSendReply = () => {
@@ -71,6 +95,24 @@ export default function VendorInquiries() {
     }));
     setNoteText("");
   };
+
+  const handleSelectInquiry = async (inq) => {
+    setSelected(inq);
+    if (!inq.read_by_vendor) {
+      try { await vendorAPI.markInquiryRead(inq.id); } catch {}
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
+        <TopBar title="Inquiries" subtitle="Manage client inquiries and requests" />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-sm text-surface-400">Loading inquiries…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
@@ -96,26 +138,33 @@ export default function VendorInquiries() {
           <div className="w-[40%] flex-shrink-0 bg-white rounded-xl border border-surface-200 flex flex-col overflow-hidden">
             <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between flex-shrink-0">
               <h2 className="text-sm font-semibold text-surface-900">All Inquiries</h2>
-              <span className="text-xs text-surface-400">{SAMPLE_INQUIRIES.length} total</span>
+              <span className="text-xs text-surface-400">{inquiries.length} total</span>
             </div>
             <div className="overflow-y-auto flex-1">
-              {SAMPLE_INQUIRIES.map((inq, idx) => {
+              {inquiries.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Inbox size={28} className="text-surface-200 mb-2" />
+                  <p className="text-sm text-surface-400">No inquiries yet</p>
+                </div>
+              )}
+              {inquiries.map((inq, idx) => {
                 const status = getStatus(inq);
-                const cfg = STATUS_CONFIG[status];
+                const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.new;
                 const isSelected = selected?.id === inq.id;
                 const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length];
                 const isNew = status === "new";
+                const initial = (inq.user_name || "?")[0].toUpperCase();
                 return (
                   <button
                     key={inq.id}
-                    onClick={() => setSelected(inq)}
+                    onClick={() => handleSelectInquiry(inq)}
                     className={`w-full text-left px-4 py-3.5 border-b border-surface-50 hover:bg-surface-50 transition-colors cursor-pointer ${
                       isSelected ? "bg-primary-50 border-l-2 border-l-primary-600" : ""
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="relative">
-                        <Avatar initial={inq.avatar} color={avatarColor} />
+                        <Avatar initial={initial} color={avatarColor} />
                         {isNew && (
                           <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-info-500 border-2 border-white rounded-full" />
                         )}
@@ -123,17 +172,17 @@ export default function VendorInquiries() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <p className={`text-xs font-semibold truncate ${isNew ? "text-surface-900" : "text-surface-700"}`}>
-                            {inq.from}
+                            {inq.user_name || inq.user_email || "Unknown"}
                           </p>
-                          <span className="text-[10px] text-surface-400 flex-shrink-0">{inq.date}</span>
+                          <span className="text-[10px] text-surface-400 flex-shrink-0">{fmtDate(inq.created_at)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${EVENT_COLORS[inq.event] || "bg-surface-100 text-surface-500"}`}>
-                            {inq.event}
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${EVENT_COLORS[inq.event_type] || "bg-surface-100 text-surface-500"}`}>
+                            {inq.event_type || "Event"}
                           </span>
-                          <span className="text-[10px] text-surface-400">{inq.eventDate}</span>
+                          <span className="text-[10px] text-surface-400">{fmtDate(inq.event_date)}</span>
                         </div>
-                        <p className="text-[11px] text-surface-500 font-medium truncate mb-1">{inq.service}</p>
+                        <p className="text-[11px] text-surface-500 font-medium truncate mb-1">{inq.subject}</p>
                         <p className="text-[11px] text-surface-400 truncate leading-relaxed">{inq.message}</p>
                         <div className="flex items-center justify-between mt-1.5">
                           <span className={cfg.cls}>{cfg.label}</span>
@@ -158,26 +207,26 @@ export default function VendorInquiries() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <Avatar
-                        initial={selected.avatar}
+                        initial={(selected.user_name || "?")[0].toUpperCase()}
                         size="lg"
-                        color={AVATAR_COLORS[SAMPLE_INQUIRIES.findIndex(i => i.id === selected.id) % AVATAR_COLORS.length]}
+                        color={AVATAR_COLORS[inquiries.findIndex(i => i.id === selected.id) % AVATAR_COLORS.length]}
                       />
                       <div>
-                        <h3 className="text-sm font-bold text-surface-900">{selected.from}</h3>
+                        <h3 className="text-sm font-bold text-surface-900">{selected.user_name || selected.user_email}</h3>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${EVENT_COLORS[selected.event] || "bg-surface-100 text-surface-500"}`}>
-                            {selected.event}
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${EVENT_COLORS[selected.event_type] || "bg-surface-100 text-surface-500"}`}>
+                            {selected.event_type || "Event"}
                           </span>
                           <span className="text-xs text-surface-400 flex items-center gap-1">
-                            <Calendar size={11} /> {selected.eventDate}
+                            <Calendar size={11} /> {fmtDate(selected.event_date)}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-surface-400">{selected.id}</span>
-                      <span className={STATUS_CONFIG[getStatus(selected)]?.cls}>
-                        {STATUS_CONFIG[getStatus(selected)]?.label}
+                      <span className="text-xs text-surface-400">{selected.id?.slice(0, 8)}</span>
+                      <span className={(STATUS_CONFIG[getStatus(selected)] || STATUS_CONFIG.new).cls}>
+                        {(STATUS_CONFIG[getStatus(selected)] || STATUS_CONFIG.new).label}
                       </span>
                     </div>
                   </div>
@@ -190,10 +239,10 @@ export default function VendorInquiries() {
                     <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">Inquiry Details</h4>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       {[
-                        { icon: MessageSquare, label: "Service",    value: selected.service },
-                        { icon: Calendar,      label: "Event Date", value: selected.eventDate },
-                        { icon: Users,         label: "Guests",     value: `${selected.guests} guests` },
-                        { icon: DollarSign,    label: "Budget",     value: selected.budget },
+                        { icon: MessageSquare, label: "Subject",    value: selected.subject || "—" },
+                        { icon: Calendar,      label: "Event Date", value: fmtDate(selected.event_date) || "—" },
+                        { icon: Users,         label: "Guests",     value: selected.guest_count ? `${selected.guest_count} guests` : "—" },
+                        { icon: DollarSign,    label: "Budget",     value: fmtBudget(selected.budget, selected.currency) },
                       ].map(({ icon: Icon, label, value }) => (
                         <div key={label} className="flex items-start gap-2">
                           <div className="w-7 h-7 bg-surface-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -324,8 +373,8 @@ export default function VendorInquiries() {
                 <div className="w-14 h-14 bg-surface-100 rounded-full flex items-center justify-center mb-3">
                   <Inbox size={24} className="text-surface-400" />
                 </div>
-                <p className="text-sm font-semibold text-surface-600">Select an inquiry</p>
-                <p className="text-xs text-surface-400 mt-1">Click an inquiry from the list to view details</p>
+                <p className="text-sm font-semibold text-surface-600">No inquiries yet</p>
+                <p className="text-xs text-surface-400 mt-1">Inquiries from clients will appear here</p>
               </div>
             )}
           </div>

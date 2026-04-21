@@ -53,7 +53,7 @@ const NOTIFICATIONS_RAW = [
     icon: Calendar,
     iconBg: "bg-yellow-50",
     iconColor: "text-yellow-500",
-    title: "30 days to your wedding! 💍",
+    title: "30 days to your wedding!",
     description: "Your wedding is coming up in 30 days. Make sure your remaining bookings (DJ, flowers) are confirmed. Open your planner to review tasks.",
     time: "Yesterday, 9:00 AM",
     unread: true,

@@ -1,29 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Inbox, CalendarCheck, X, Star, CheckCircle, Package,
   CreditCard, DollarSign, MessageSquare, Bell, Settings,
-  Check, ChevronRight,
+  Check,
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
-
-const SAMPLE_NOTIFICATIONS = [
-  // Today
-  { id: 1,  type: "inquiry",     icon: Inbox,         title: "New inquiry from Anna H.",         desc: "Anna Hovhannisyan sent an inquiry for Wedding Cake (3-tier) on Jun 15.",       time: "2m ago",   group: "Today",     unread: true  },
-  { id: 2,  type: "booking",     icon: CalendarCheck, title: "Booking confirmed",                 desc: "Your booking BK-2038 with Sona Karapetyan has been confirmed.",               time: "35m ago",  group: "Today",     unread: true  },
-  { id: 3,  type: "message",     icon: MessageSquare, title: "New message from Tigran A.",        desc: "Tigran Avetisyan: 'Is the DJ package available for outdoor events?'",          time: "1h ago",   group: "Today",     unread: true  },
-  { id: 4,  type: "review",      icon: Star,          title: "New 5-star review",                 desc: "Anna Hovhannisyan left a 5-star review for your Wedding Cake service.",        time: "3h ago",   group: "Today",     unread: false },
-  // Yesterday
-  { id: 5,  type: "cancelled",   icon: X,             title: "Booking cancelled",                 desc: "BK-2037 (Karen Martirosyan - Office Event) has been cancelled by the client.", time: "Yesterday", group: "Yesterday", unread: false },
-  { id: 6,  type: "payment",     icon: DollarSign,    title: "Payment received",                  desc: "You received $850 for order #ORD-1037. Funds are on their way.",              time: "Yesterday", group: "Yesterday", unread: true  },
-  { id: 7,  type: "listing",     icon: Package,       title: "Listing approved",                  desc: "Your new listing 'Premium Wedding Cake Deluxe' has been approved.",            time: "Yesterday", group: "Yesterday", unread: false },
-  // This Week
-  { id: 8,  type: "profile",     icon: CheckCircle,   title: "Profile update approved",           desc: "Your business profile changes have been reviewed and approved by admin.",       time: "Apr 4",    group: "This Week", unread: false },
-  { id: 9,  type: "subscription",icon: CreditCard,    title: "Subscription expiring soon",        desc: "Your Pro subscription expires in 18 days. Renew now to avoid disruption.",     time: "Apr 3",    group: "This Week", unread: true  },
-  { id: 10, type: "review",      icon: Star,          title: "New review needs response",         desc: "Hayk Simonyan left a 3-star review. Responding improves your score.",          time: "Apr 3",    group: "This Week", unread: false },
-  { id: 11, type: "system",      icon: Bell,          title: "Platform update",                   desc: "Salooote has launched new booking features. See what's new in your dashboard.", time: "Apr 2",    group: "This Week", unread: false },
-  { id: 12, type: "inquiry",     icon: Inbox,         title: "Inquiry expired",                   desc: "Inquiry #INQ-495 from Davit H. expired without a response after 72 hours.",    time: "Apr 2",    group: "This Week", unread: false },
-];
+import { vendorAPI } from "@/lib/api";
 
 const FILTER_TABS = ["All", "Unread", "Inquiries", "Bookings", "Reviews", "System"];
 
@@ -31,7 +14,7 @@ const TYPE_FILTER_MAP = {
   Inquiries: ["inquiry"],
   Bookings:  ["booking", "cancelled"],
   Reviews:   ["review"],
-  System:    ["system", "profile", "subscription", "listing", "payment"],
+  System:    ["system", "profile", "subscription", "listing", "payment", "info", "success", "warning", "danger"],
 };
 
 const ICON_BG = {
@@ -44,38 +27,97 @@ const ICON_BG = {
   subscription: "bg-warning-50 text-warning-600",
   payment:      "bg-success-50 text-success-600",
   message:      "bg-blue-50 text-blue-600",
+  info:         "bg-info-50 text-info-600",
+  success:      "bg-success-50 text-success-600",
+  warning:      "bg-warning-50 text-warning-600",
+  danger:       "bg-danger-50 text-danger-600",
   system:       "bg-surface-100 text-surface-500",
 };
 
-export default function VendorNotifications() {
-  const [activeFilter, setActiveFilter] = useState("All");
-  const [readSet, setReadSet] = useState(new Set(
-    SAMPLE_NOTIFICATIONS.filter(n => !n.unread).map(n => n.id)
-  ));
+const TYPE_ICON = {
+  inquiry:      Inbox,
+  booking:      CalendarCheck,
+  cancelled:    X,
+  review:       Star,
+  profile:      CheckCircle,
+  listing:      Package,
+  subscription: CreditCard,
+  payment:      DollarSign,
+  message:      MessageSquare,
+  info:         Bell,
+  success:      CheckCircle,
+  warning:      Bell,
+  danger:       X,
+  system:       Bell,
+};
 
-  const markAllRead = () => {
-    setReadSet(new Set(SAMPLE_NOTIFICATIONS.map(n => n.id)));
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getGroup(iso) {
+  if (!iso) return "This Week";
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = diff / 3600000;
+  if (hours < 24) return "Today";
+  if (hours < 48) return "Yesterday";
+  return "This Week";
+}
+
+export default function VendorNotifications() {
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("All");
+  const [readSet, setReadSet] = useState(new Set());
+
+  useEffect(() => {
+    vendorAPI.notifications({ limit: 50 })
+      .then(res => {
+        const list = res?.data || [];
+        setNotifications(list);
+        setReadSet(new Set(list.filter(n => n.is_read).map(n => n.id)));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const markAllRead = async () => {
+    try {
+      await vendorAPI.markAllNotifsRead();
+      setReadSet(new Set(notifications.map(n => n.id)));
+    } catch {}
   };
 
-  const markRead = (id) => {
+  const markRead = async (id) => {
+    if (readSet.has(id)) return;
     setReadSet(prev => new Set([...prev, id]));
+    try { await vendorAPI.markNotifRead(id); } catch {}
   };
 
   const isRead = (id) => readSet.has(id);
 
-  const filtered = SAMPLE_NOTIFICATIONS.filter(n => {
+  const filtered = notifications.filter(n => {
     if (activeFilter === "Unread") return !isRead(n.id);
     if (activeFilter === "All")    return true;
     const types = TYPE_FILTER_MAP[activeFilter] || [];
     return types.includes(n.type);
   });
 
-  const unreadCount = SAMPLE_NOTIFICATIONS.filter(n => !isRead(n.id)).length;
+  const unreadCount = notifications.filter(n => !isRead(n.id)).length;
 
-  // Group filtered notifications
   const groups = ["Today", "Yesterday", "This Week"];
   const grouped = groups.reduce((acc, g) => {
-    const items = filtered.filter(n => n.group === g);
+    const items = filtered.filter(n => getGroup(n.created_at) === g);
     if (items.length) acc[g] = items;
     return acc;
   }, {});
@@ -130,9 +172,9 @@ export default function VendorNotifications() {
           )}
         </div>
 
-        {/* Notification groups */}
-        {Object.keys(grouped).length === 0 ? (
-          /* Empty state */
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-sm text-surface-400">Loading notifications…</div>
+        ) : Object.keys(grouped).length === 0 ? (
           <div className="bg-white rounded-xl border border-surface-200 p-16 text-center">
             <div className="w-14 h-14 bg-success-50 rounded-full flex items-center justify-center mx-auto mb-3">
               <Check size={24} className="text-success-500" />
@@ -146,9 +188,9 @@ export default function VendorNotifications() {
               <h3 className="text-xs font-bold text-surface-400 uppercase tracking-wider mb-2 px-1">{group}</h3>
               <div className="bg-white rounded-xl border border-surface-200 overflow-hidden divide-y divide-surface-50">
                 {items.map(n => {
-                  const Icon = n.icon;
                   const read = isRead(n.id);
                   const iconStyle = ICON_BG[n.type] || "bg-surface-100 text-surface-400";
+                  const Icon = TYPE_ICON[n.type] || Bell;
 
                   return (
                     <div
@@ -158,23 +200,18 @@ export default function VendorNotifications() {
                         !read ? "bg-primary-50/40" : ""
                       }`}
                     >
-                      {/* Icon */}
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${iconStyle}`}>
                         <Icon size={16} />
                       </div>
-
-                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className={`text-xs leading-snug ${read ? "font-medium text-surface-700" : "font-semibold text-surface-900"}`}>
                             {n.title}
                           </p>
-                          <span className="text-[10px] text-surface-400 flex-shrink-0 mt-0.5">{n.time}</span>
+                          <span className="text-[10px] text-surface-400 flex-shrink-0 mt-0.5">{timeAgo(n.created_at)}</span>
                         </div>
-                        <p className="text-[11px] text-surface-500 mt-0.5 leading-relaxed pr-4">{n.desc}</p>
+                        <p className="text-[11px] text-surface-500 mt-0.5 leading-relaxed pr-4">{n.body}</p>
                       </div>
-
-                      {/* Unread dot */}
                       <div className="flex-shrink-0 mt-2">
                         {!read ? (
                           <span className="w-2 h-2 bg-primary-600 rounded-full block" />

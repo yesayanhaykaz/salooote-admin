@@ -2,7 +2,14 @@
 import { useState } from "react";
 import { Send, Paperclip, Search } from "lucide-react";
 import TopBar from "@/components/TopBar";
-import { MESSAGES } from "@/lib/data";
+
+const MESSAGES = [
+  { id: 1, from: "Anna Hovhannisyan", avatar: "A", color: "bg-pink-500",   preview: "Hi, is the cake available for April 12?",       time: "2m ago",  unread: 2 },
+  { id: 2, from: "Tigran Avetisyan",  avatar: "T", color: "bg-blue-500",   preview: "Thank you for the quick delivery!",             time: "15m ago", unread: 0 },
+  { id: 3, from: "Sona Karapetyan",   avatar: "S", color: "bg-purple-500", preview: "Can I change my order to Saturday?",            time: "1h ago",  unread: 1 },
+  { id: 4, from: "Lilit Sargsyan",    avatar: "L", color: "bg-green-500",  preview: "I need a custom balloon arrangement for 100...", time: "3h ago",  unread: 0 },
+  { id: 5, from: "Davit Hakobyan",    avatar: "D", color: "bg-orange-500", preview: "Please confirm my order #ORD-1039",             time: "1d ago",  unread: 0 },
+];
 
 const CHAT_HISTORY = {
   1: [

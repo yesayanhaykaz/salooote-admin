@@ -1,61 +1,89 @@
 "use client";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Lock, User, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, CalendarDays, Lock } from "lucide-react";
 import TopBar from "@/components/TopBar";
+import { vendorAPI } from "@/lib/api";
 
 const DAYS_OF_WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// April 2025 starts on Tuesday (offset = 1 for Mon-based grid)
-const APRIL_OFFSET = 1; // 0=Mon, 1=Tue...
-const APRIL_DAYS   = 30;
-
-const BOOKINGS_APRIL = [
-  { day: 5,  client: "Anna H.",    event: "Wedding",      status: "confirmed",  id: "BK-501" },
-  { day: 9,  client: "Tigran A.",  event: "Birthday",     status: "pending",    id: "BK-502" },
-  { day: 12, client: "Lilit S.",   event: "Birthday",     status: "confirmed",  id: "BK-503" },
-  { day: 15, client: "Nare G.",    event: "Christening",  status: "confirmed",  id: "BK-504" },
-  { day: 19, client: "Karen M.",   event: "Corporate",    status: "pending",    id: "BK-505" },
-  { day: 22, client: "Sona K.",    event: "Engagement",   status: "confirmed",  id: "BK-506" },
-  { day: 26, client: "Aram P.",    event: "Wedding",      status: "confirmed",  id: "BK-507" },
-  { day: 30, client: "Davit H.",   event: "Birthday",     status: "pending",    id: "BK-508" },
-];
-
-const BLOCKED_DAYS = new Set([13, 14]); // initial blocked days
-
 const STATUS_CHIP = {
-  confirmed: "bg-success-500 text-white",
-  pending:   "bg-warning-500 text-white",
+  confirmed:   "bg-success-500 text-white",
+  pending:     "bg-warning-500 text-white",
+  in_progress: "bg-info-500 text-white",
+  completed:   "bg-surface-400 text-white",
+  cancelled:   "bg-danger-200 text-danger-600",
 };
 
 const WORKING_DAYS_DEFAULT = { Mon: true, Tue: true, Wed: true, Thu: true, Fri: true, Sat: true, Sun: false };
 
+function getMonthGrid(year, month) {
+  // month is 0-indexed
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const offset = (firstDay + 6) % 7; // convert to Mon=0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+  return Array.from({ length: totalCells }, (_, i) => {
+    const day = i - offset + 1;
+    return day >= 1 && day <= daysInMonth ? day : null;
+  });
+}
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
 export default function VendorCalendar() {
-  const [blockedDays, setBlockedDays] = useState(BLOCKED_DAYS);
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth());
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [blockedDays, setBlockedDays] = useState(new Set());
   const [blockStart, setBlockStart] = useState("");
-  const [blockEnd, setBlockEnd]   = useState("");
+  const [blockEnd, setBlockEnd] = useState("");
   const [blockReason, setBlockReason] = useState("");
   const [workingDays, setWorkingDays] = useState(WORKING_DAYS_DEFAULT);
-  const [selectedDay, setSelectedDay] = useState(null);
 
-  // Build grid cells: total cells = APRIL_OFFSET + APRIL_DAYS, padded to multiple of 7
-  const totalCells = Math.ceil((APRIL_OFFSET + APRIL_DAYS) / 7) * 7;
-  const cells = Array.from({ length: totalCells }, (_, i) => {
-    const day = i - APRIL_OFFSET + 1;
-    return day >= 1 && day <= APRIL_DAYS ? day : null;
-  });
+  useEffect(() => {
+    vendorAPI.bookings({ limit: 100 })
+      .then(res => setBookings(res?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
+  const prevMonth = () => {
+    if (month === 0) { setMonth(11); setYear(y => y - 1); }
+    else setMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (month === 11) { setMonth(0); setYear(y => y + 1); }
+    else setMonth(m => m + 1);
+  };
+
+  // Build bookings-by-day for current month
   const bookingsByDay = {};
-  BOOKINGS_APRIL.forEach(b => {
-    if (!bookingsByDay[b.day]) bookingsByDay[b.day] = [];
-    bookingsByDay[b.day].push(b);
+  bookings.forEach(b => {
+    if (!b.event_date) return;
+    const d = new Date(b.event_date);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      if (!bookingsByDay[day]) bookingsByDay[day] = [];
+      bookingsByDay[day].push(b);
+    }
   });
+
+  const cells = getMonthGrid(year, month);
+  const today = now.getDate();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
 
   const handleBlockDates = () => {
     if (!blockStart || !blockEnd) return;
-    const start = parseInt(blockStart.split("-")[2]);
-    const end   = parseInt(blockEnd.split("-")[2]);
+    const startD = new Date(blockStart);
+    const endD   = new Date(blockEnd);
     const newBlocked = new Set(blockedDays);
-    for (let d = start; d <= end; d++) newBlocked.add(d);
+    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        newBlocked.add(d.getDate());
+      }
+    }
     setBlockedDays(newBlocked);
     setBlockStart(""); setBlockEnd(""); setBlockReason("");
   };
@@ -67,11 +95,11 @@ export default function VendorCalendar() {
     setBlockedDays(newBlocked);
   };
 
-  const upcomingBookings = BOOKINGS_APRIL
-    .filter(b => b.day >= 7)
+  // Upcoming bookings: future dates
+  const upcoming = bookings
+    .filter(b => b.event_date && new Date(b.event_date) >= now)
+    .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
     .slice(0, 5);
-
-  const today = 7; // simulating today = Apr 7
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
@@ -84,11 +112,11 @@ export default function VendorCalendar() {
             {/* Month navigation */}
             <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between">
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 transition-colors cursor-pointer border-none bg-transparent">
+                <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 transition-colors cursor-pointer border-none bg-transparent">
                   <ChevronLeft size={16} className="text-surface-500" />
                 </button>
-                <h2 className="text-sm font-bold text-surface-900">April 2025</h2>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 transition-colors cursor-pointer border-none bg-transparent">
+                <h2 className="text-sm font-bold text-surface-900">{MONTH_NAMES[month]} {year}</h2>
+                <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-100 transition-colors cursor-pointer border-none bg-transparent">
                   <ChevronRight size={16} className="text-surface-500" />
                 </button>
               </div>
@@ -108,8 +136,8 @@ export default function VendorCalendar() {
                   if (!day) {
                     return <div key={`empty-${idx}`} className="min-h-[90px] border-b border-r border-surface-50 bg-surface-50/50 last:border-r-0" />;
                   }
-                  const isBlocked  = blockedDays.has(day);
-                  const isToday    = day === today;
+                  const isBlocked   = blockedDays.has(day);
+                  const isToday     = isCurrentMonth && day === today;
                   const dayBookings = bookingsByDay[day] || [];
                   const col = idx % 7;
                   const isWeekend = col === 5 || col === 6;
@@ -122,7 +150,6 @@ export default function VendorCalendar() {
                         isBlocked ? "bg-danger-50" : isWeekend ? "bg-surface-50/60" : "bg-white"
                       } ${!dayBookings.length ? "cursor-pointer hover:bg-primary-50/30" : ""}`}
                     >
-                      {/* Day number */}
                       <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-semibold mb-1 ${
                         isToday
                           ? "bg-primary-600 text-white"
@@ -135,7 +162,6 @@ export default function VendorCalendar() {
                         {day}
                       </span>
 
-                      {/* Blocked label */}
                       {isBlocked && !dayBookings.length && (
                         <div className="flex items-center gap-0.5 mt-0.5">
                           <Lock size={10} className="text-danger-400" />
@@ -143,14 +169,13 @@ export default function VendorCalendar() {
                         </div>
                       )}
 
-                      {/* Booking chips */}
                       <div className="space-y-0.5 mt-0.5">
                         {dayBookings.map(b => (
                           <div
                             key={b.id}
-                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md truncate ${STATUS_CHIP[b.status]}`}
+                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md truncate ${STATUS_CHIP[b.status] || "bg-surface-200 text-surface-700"}`}
                           >
-                            {b.event}
+                            {b.event_type || b.user_name || "Booking"}
                           </div>
                         ))}
                       </div>
@@ -186,25 +211,35 @@ export default function VendorCalendar() {
                 <h3 className="text-sm font-semibold text-surface-900">Upcoming Bookings</h3>
               </div>
               <div className="divide-y divide-surface-50">
-                {upcomingBookings.map(b => (
-                  <div key={b.id} className="px-4 py-3 hover:bg-surface-50 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-surface-800 truncate">{b.client}</p>
-                        <p className="text-[11px] text-surface-500 truncate">{b.event}</p>
+                {loading && (
+                  <div className="px-4 py-6 text-xs text-surface-400 text-center">Loading…</div>
+                )}
+                {!loading && upcoming.length === 0 && (
+                  <div className="px-4 py-6 text-xs text-surface-400 text-center">No upcoming bookings</div>
+                )}
+                {upcoming.map(b => {
+                  const d = new Date(b.event_date);
+                  const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  return (
+                    <div key={b.id} className="px-4 py-3 hover:bg-surface-50 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-surface-800 truncate">{b.user_name || "Client"}</p>
+                          <p className="text-[11px] text-surface-500 truncate">{b.event_type || "Booking"}</p>
+                        </div>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                          b.status === "confirmed" ? "bg-success-50 text-success-600" : "bg-warning-50 text-warning-600"
+                        }`}>
+                          {b.status}
+                        </span>
                       </div>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                        b.status === "confirmed" ? "bg-success-50 text-success-600" : "bg-warning-50 text-warning-600"
-                      }`}>
-                        {b.status}
-                      </span>
+                      <div className="flex items-center gap-1 mt-1">
+                        <CalendarDays size={10} className="text-surface-400" />
+                        <span className="text-[10px] text-surface-400">{label}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <CalendarDays size={10} className="text-surface-400" />
-                      <span className="text-[10px] text-surface-400">Apr {b.day}, 2025</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -216,31 +251,19 @@ export default function VendorCalendar() {
               <div className="p-4 space-y-3">
                 <div>
                   <label className="text-[11px] font-medium text-surface-500 block mb-1">From</label>
-                  <input
-                    type="date"
-                    value={blockStart}
-                    onChange={e => setBlockStart(e.target.value)}
-                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 focus:outline-none"
-                  />
+                  <input type="date" value={blockStart} onChange={e => setBlockStart(e.target.value)}
+                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium text-surface-500 block mb-1">To</label>
-                  <input
-                    type="date"
-                    value={blockEnd}
-                    onChange={e => setBlockEnd(e.target.value)}
-                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 focus:outline-none"
-                  />
+                  <input type="date" value={blockEnd} onChange={e => setBlockEnd(e.target.value)}
+                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-[11px] font-medium text-surface-500 block mb-1">Reason (optional)</label>
-                  <input
-                    type="text"
-                    value={blockReason}
-                    onChange={e => setBlockReason(e.target.value)}
+                  <input type="text" value={blockReason} onChange={e => setBlockReason(e.target.value)}
                     placeholder="e.g. Vacation, Personal"
-                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 placeholder:text-surface-300 focus:outline-none"
-                  />
+                    className="w-full text-xs border border-surface-200 rounded-lg px-3 py-2 text-surface-700 placeholder:text-surface-300 focus:outline-none" />
                 </div>
                 <button
                   onClick={handleBlockDates}
@@ -274,7 +297,6 @@ export default function VendorCalendar() {
                     </button>
                   ))}
                 </div>
-
                 <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-2">Time Slots</p>
                 <div className="space-y-1.5">
                   {[

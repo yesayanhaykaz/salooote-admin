@@ -11,7 +11,7 @@ import Link from "next/link";
 const EVENTS = [
   {
     id: 1,
-    emoji: "💍",
+    icon: "Ring",
     title: "Anna & Aram's Wedding",
     type: "Wedding",
     date: "Jun 15, 2025",
@@ -25,7 +25,7 @@ const EVENTS = [
   },
   {
     id: 2,
-    emoji: "🎂",
+    icon: "Cake",
     title: "Lilit's Birthday Party",
     type: "Birthday",
     date: "May 3, 2025",
@@ -80,7 +80,7 @@ export default function UserDashboard() {
           <div className="relative flex items-center justify-between">
             <div>
               <p className="text-violet-200 text-sm font-medium mb-1">Upcoming Milestone</p>
-              <h2 className="text-2xl font-bold mb-1">Your Wedding is in <span className="text-yellow-300">69 days!</span> 🎉</h2>
+              <h2 className="text-2xl font-bold mb-1">Your Wedding is in <span className="text-yellow-300">69 days!</span></h2>
               <p className="text-violet-100 text-sm">June 15, 2025 · Yerevan, Armenia · 120 guests</p>
             </div>
             <div className="hidden sm:flex flex-col items-center bg-white/20 backdrop-blur rounded-xl px-6 py-4 text-center">
@@ -126,7 +126,7 @@ export default function UserDashboard() {
                   <div key={ev.id} className="border border-surface-200 rounded-xl overflow-hidden">
                     <div className={`bg-gradient-to-r ${ev.color} px-4 py-3 flex items-center justify-between`}>
                       <div className="flex items-center gap-2">
-                        <span className="text-xl">{ev.emoji}</span>
+                        <span className="text-sm font-bold text-white/80">{ev.type}</span>
                         <div>
                           <p className="text-white font-semibold text-sm leading-none">{ev.title}</p>
                           <p className="text-white/70 text-xs mt-0.5">{ev.type}</p>

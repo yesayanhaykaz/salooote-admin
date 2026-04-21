@@ -1,13 +1,36 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
-import { Eye, EyeOff, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
+import { authAPI } from "@/lib/api";
+import { saveTokens, saveUser } from "@/lib/auth";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [show, setShow] = useState(false);
-  const [role, setRole] = useState("admin");
+  const [email, setEmail] = useState("admin@salooote.am");
+  const [password, setPassword] = useState("Admin@123");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const redirects = { admin: "/admin", vendor: "/vendor", user: "/user/orders" };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const res = await authAPI.login(email, password);
+      saveTokens(res.data.access_token, res.data.refresh_token);
+      saveUser(res.data.user);
+      const role = res.data.user.role;
+      if (role === "admin") router.push("/admin");
+      else if (role === "vendor") router.push("/vendor");
+      else router.push("/user");
+    } catch (err) {
+      setError(err.message || "Invalid email or password");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-surface-50 flex">
@@ -52,34 +75,22 @@ export default function LoginPage() {
             <p className="text-surface-400 text-sm">Sign in to your account</p>
           </div>
 
-          {/* Role selector */}
-          <div className="flex gap-2 p-1 bg-surface-100 rounded-xl mb-6">
-            {[
-              { key: "admin",  label: "Admin" },
-              { key: "vendor", label: "Vendor" },
-              { key: "user",   label: "User" },
-            ].map(r => (
-              <button
-                key={r.key}
-                onClick={() => setRole(r.key)}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold border-none cursor-pointer transition-all ${
-                  role === r.key
-                    ? "bg-white text-primary-600 shadow-card"
-                    : "bg-transparent text-surface-500 hover:text-surface-800"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm mb-4">
+              <AlertCircle size={15} className="flex-shrink-0" />
+              {error}
+            </div>
+          )}
 
-          <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-surface-700 mb-1.5">Email</label>
               <input
                 type="email"
-                defaultValue={role === "admin" ? "haykaz@salooote.am" : role === "vendor" ? "vendor@salooote.am" : "anna@example.com"}
-                className="w-full px-4 py-3 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 transition-all"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                className="w-full px-4 py-3 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 transition-all outline-none focus:border-primary-400"
                 placeholder="your@email.com"
               />
             </div>
@@ -92,11 +103,14 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   type={show ? "text" : "password"}
-                  defaultValue="password123"
-                  className="w-full px-4 py-3 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 transition-all pr-11"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 transition-all pr-11 outline-none focus:border-primary-400"
                   placeholder="••••••••"
                 />
                 <button
+                  type="button"
                   onClick={() => setShow(!show)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 border-none bg-transparent cursor-pointer text-surface-400 hover:text-surface-600"
                 >
@@ -105,19 +119,21 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Link href={redirects[role]} className="no-underline block">
-              <button className="w-full bg-primary-600 text-white border-none rounded-xl py-3 text-sm font-semibold cursor-pointer hover:bg-primary-700 transition-colors flex items-center justify-center gap-2 mt-2">
-                Sign In <ArrowRight size={15} />
-              </button>
-            </Link>
-          </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary-600 text-white border-none rounded-xl py-3 text-sm font-semibold cursor-pointer hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? "Signing in…" : <><span>Sign In</span><ArrowRight size={15} /></>}
+            </button>
+          </form>
 
-          <p className="text-center text-sm text-surface-400 mt-6">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-primary-600 font-semibold no-underline hover:text-primary-700">
-              Sign up
-            </Link>
-          </p>
+          <div className="mt-5 px-4 py-3 rounded-xl bg-surface-50 border border-surface-200 text-xs text-surface-500">
+            <p className="font-semibold text-surface-700 mb-1">Demo credentials</p>
+            <p>Admin: admin@salooote.am / Admin@123</p>
+            <p>Vendor: vendor@salooote.am / Vendor@123</p>
+            <p>User: user@example.com / User@123</p>
+          </div>
         </div>
       </div>
     </div>

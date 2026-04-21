@@ -1,220 +1,641 @@
 "use client";
-import { useState, useRef } from "react";
-import { Plus, Pencil, Trash2, X, Upload, Info, Star, Clock, Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Plus, Pencil, Trash2, ArrowLeft, Eye, EyeOff,
+  Filter, Star, Clock, Save, Send,
+  ChevronDown, ChevronUp, Tag, Briefcase, DollarSign,
+} from "lucide-react";
 import TopBar from "@/components/TopBar";
+import ImageManager from "@/components/ImageManager";
+import RichTextEditor from "@/components/RichTextEditor";
+import { vendorAPI, adminCategoriesAPI } from "@/lib/api";
 
-const CATEGORIES = ["Photography","Catering","DJ & Music","Venue Decoration","Cakes & Desserts","Flowers & Gifts","Event Planning","Entertainment"];
-const PRICE_TYPES = ["Fixed Price","Starting From","Per Hour","Per Person","Per Day"];
-const STEPS = ["Basic Info","Media & Portfolio","Pricing","Details","Publish"];
-const GRADIENTS = ["from-pink-400 to-rose-500","from-violet-400 to-purple-500","from-blue-400 to-indigo-500","from-emerald-400 to-green-500","from-orange-400 to-amber-500","from-teal-400 to-cyan-500"];
-
-const SERVICES = [
-  { id:1, name:"Wedding Photography Package",category:"Photography",price:"From $800",duration:"8 hrs",bookings:23,rating:4.9,status:"active",gradient:"from-pink-400 to-rose-500" },
-  { id:2, name:"Event Video Coverage",        category:"Photography",price:"From $400",duration:"5 hrs",bookings:15,rating:4.8,status:"active",gradient:"from-violet-400 to-purple-500" },
-  { id:3, name:"Birthday Cake — Custom",      category:"Cakes",      price:"From $120",duration:"3 days",bookings:48,rating:4.9,status:"active",gradient:"from-amber-400 to-orange-500" },
-  { id:4, name:"Floral Decoration Setup",     category:"Flowers",    price:"From $300",duration:"1 day", bookings:31,rating:4.7,status:"active",gradient:"from-emerald-400 to-green-500" },
-  { id:5, name:"DJ Set — 4 Hours",            category:"DJ & Music", price:"From $350",duration:"4 hrs",bookings:19,rating:4.8,status:"active",gradient:"from-blue-400 to-indigo-500" },
-  { id:6, name:"Corporate Catering (50 pax)", category:"Catering",   price:"From $850",duration:"Half day",bookings:8,rating:4.6,status:"draft", gradient:"from-teal-400 to-cyan-500" },
+/* ─── constants ──────────────────────────────────────────────────────────── */
+const GRADIENTS = [
+  "from-pink-400 to-rose-500","from-violet-400 to-purple-500",
+  "from-blue-400 to-indigo-500","from-emerald-400 to-green-500",
+  "from-orange-400 to-amber-500","from-teal-400 to-cyan-500",
+];
+const PRICING_TYPES = [
+  { label: "Fixed",       value: "fixed" },
+  { label: "Quote",       value: "quote" },
+  { label: "Starting",    value: "starting_from" },
+  { label: "Per Hour",    value: "per_hour" },
+  { label: "Per Person",  value: "per_person" },
+  { label: "Per Day",     value: "per_day" },
+  { label: "Package",     value: "package" },
+];
+const LANGS = [
+  { code: "en", flag: "🇺🇸", label: "EN" },
+  { code: "hy", flag: "🇦🇲", label: "HY" },
+  { code: "ru", flag: "🇷🇺", label: "RU" },
 ];
 
-function Toggle({checked:init=false}) {
-  const [on,setOn]=useState(init);
-  return (
-    <button onClick={()=>setOn(v=>!v)} style={{width:40,height:22}}
-      className={`relative rounded-full cursor-pointer border-none flex-shrink-0 transition-colors ${on?"bg-primary-600":"bg-surface-200"}`}>
-      <span className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all ${on?"left-[22px]":"left-[3px]"}`}/>
-    </button>
-  );
-}
-
-function ImageUploadZone({label,hint,multiple=false}) {
-  const [previews,setPreviews]=useState([]);
-  const ref=useRef();
-  const handle=files=>{const urls=Array.from(files).map(f=>URL.createObjectURL(f));setPreviews(p=>multiple?[...p,...urls]:urls);};
+/* ─── helpers ────────────────────────────────────────────────────────────── */
+function Inp({ label, placeholder, type = "text", prefix, suffix, value, onChange, required }) {
   return (
     <div>
-      {label&&<p className="text-xs font-semibold text-surface-700 mb-1.5">{label}</p>}
-      {previews.length>0&&multiple&&<div className="grid grid-cols-4 gap-2 mb-2">{previews.map((src,i)=>(
-        <div key={i} className="aspect-square relative rounded-xl overflow-hidden bg-surface-100">
-          <img src={src} alt="" className="w-full h-full object-cover"/>
-          <button onClick={()=>setPreviews(p=>p.filter((_,j)=>j!==i))} className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center cursor-pointer border-none"><X size={10} className="text-white"/></button>
-        </div>
-      ))}</div>}
-      {(previews.length===0||multiple)&&<div onClick={()=>ref.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();handle(e.dataTransfer.files);}}
-        className="border-2 border-dashed border-surface-300 rounded-xl flex flex-col items-center justify-center gap-2 py-8 cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-all bg-surface-50">
-        <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center"><Upload size={18} className="text-surface-400"/></div>
-        <p className="text-sm font-medium text-surface-700">Click to upload or drag & drop</p>
-        <p className="text-xs text-surface-400">{hint||"PNG, JPG — max 5MB"}</p>
-        <input ref={ref} type="file" accept="image/*" multiple={multiple} className="hidden" onChange={e=>handle(e.target.files)}/>
-      </div>}
-      {previews.length>0&&!multiple&&<div className="aspect-video relative rounded-xl overflow-hidden bg-surface-100">
-        <img src={previews[0]} alt="" className="w-full h-full object-cover"/>
-        <button onClick={()=>setPreviews([])} className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center cursor-pointer border-none"><X size={13} className="text-white"/></button>
-      </div>}
+      {label && (
+        <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+          {label}{required && <span className="text-danger-500 ml-0.5">*</span>}
+        </label>
+      )}
+      <div className="relative flex items-center">
+        {prefix && (
+          <span className="absolute left-0 inset-y-0 flex items-center px-3 text-sm font-medium text-surface-500 bg-surface-50 border-r border-surface-200 rounded-l-xl select-none">
+            {prefix}
+          </span>
+        )}
+        <input
+          type={type}
+          value={value ?? ""}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={`w-full py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all ${prefix ? "pl-16 pr-3.5" : "px-3.5"} ${suffix ? "pr-12" : ""}`}
+        />
+        {suffix && <span className="absolute right-3 text-xs text-surface-400 select-none">{suffix}</span>}
+      </div>
     </div>
   );
 }
 
-function TagInput({label}) {
-  const [tags,setTags]=useState([]);const [val,setVal]=useState("");
-  const add=e=>{if((e.key==="Enter"||e.key===",")&&val.trim()){e.preventDefault();setTags(t=>[...t,val.trim()]);setVal("");}};
+function Section({ title, icon: Icon, children, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl border border-surface-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-50 transition-colors cursor-pointer border-none bg-transparent"
+      >
+        <div className="flex items-center gap-2.5">
+          {Icon && <Icon size={15} className="text-primary-500" />}
+          <span className="text-sm font-bold text-surface-900">{title}</span>
+        </div>
+        {open ? <ChevronUp size={15} className="text-surface-400" /> : <ChevronDown size={15} className="text-surface-400" />}
+      </button>
+      {open && <div className="px-5 pb-5 space-y-4 border-t border-surface-100">{children}</div>}
+    </div>
+  );
+}
+
+function TagInput({ label, value = [], onChange }) {
+  const [val, setVal] = useState("");
+  const add = e => {
+    if ((e.key === "Enter" || e.key === ",") && val.trim()) {
+      e.preventDefault();
+      onChange([...value, val.trim()]);
+      setVal("");
+    }
+  };
+  const remove = i => onChange(value.filter((_, j) => j !== i));
   return (
     <div>
-      <label className="block text-xs font-semibold text-surface-700 mb-1.5">{label}</label>
-      <div className="flex flex-wrap gap-1.5 p-2.5 border border-surface-200 rounded-xl bg-white min-h-[42px] focus-within:border-primary-500 transition-colors">
-        {tags.map((t,i)=>(
-          <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-600 text-xs font-medium rounded-lg">{t}<button onClick={()=>setTags(ts=>ts.filter((_,j)=>j!==i))} className="border-none bg-transparent cursor-pointer text-primary-400"><X size={10}/></button></span>
+      {label && <label className="block text-xs font-semibold text-surface-700 mb-1.5">{label}</label>}
+      <div className="flex flex-wrap gap-1.5 p-2.5 border border-surface-200 rounded-xl bg-white min-h-[42px] focus-within:border-primary-400 transition-colors">
+        {value.map((t, i) => (
+          <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-primary-50 text-primary-600 text-xs font-medium rounded-lg">
+            {t}
+            <button onClick={() => remove(i)} className="border-none bg-transparent cursor-pointer text-primary-400 hover:text-primary-600">×</button>
+          </span>
         ))}
-        <input value={val} onChange={e=>setVal(e.target.value)} onKeyDown={add} placeholder={tags.length===0?"Add tags (Enter to confirm)…":""} className="flex-1 min-w-[140px] border-none outline-none text-sm text-surface-700 placeholder:text-surface-400 bg-transparent"/>
+        <input
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={add}
+          placeholder={value.length === 0 ? "Type and press Enter…" : ""}
+          className="flex-1 min-w-[140px] border-none outline-none text-sm text-surface-700 placeholder:text-surface-400 bg-transparent"
+        />
       </div>
     </div>
   );
 }
 
-function AddServiceModal({onClose}) {
-  const [step,setStep]=useState(0);
-  const [priceType,setPriceType]=useState("Starting From");
-  const [status,setStatus]=useState("active");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose}/>
-      <div className="relative bg-white rounded-2xl w-full max-w-[680px] max-h-[90vh] flex flex-col shadow-elevated overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
-          <h2 className="font-bold text-surface-900">Add New Service</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-100 cursor-pointer border-none bg-transparent"><X size={16}/></button>
-        </div>
-        <div className="flex items-center gap-1 px-6 py-3 border-b border-surface-100 overflow-x-auto">
-          {STEPS.map((s,i)=>(
-            <button key={i} onClick={()=>setStep(i)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer border-none transition-all mr-0.5 ${step===i?"bg-primary-50 text-primary-600":i<step?"text-success-600 bg-success-50":"text-surface-400 bg-transparent"}`}>
-              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${step===i?"bg-primary-600 text-white":i<step?"bg-success-500 text-white":"bg-surface-200 text-surface-500"}`}>{i<step?"✓":i+1}</span>{s}
-            </button>
-          ))}
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-
-          {step===0&&<>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Service Name <span className="text-danger-500">*</span></label><input placeholder="e.g. Wedding Photography Package" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Description <span className="text-danger-500">*</span></label><textarea placeholder="Describe what's included, your approach, what clients can expect…" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none resize-none min-h-[100px]"/></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Category <span className="text-danger-500">*</span></label><select className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer"><option value="">Select…</option>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></div>
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Duration</label><input placeholder="e.g. 4 hours, 1 day, 3 days" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-            </div>
-            <TagInput label="Tags"/>
-          </>}
-
-          {step===1&&<>
-            <div className="flex items-start gap-2 bg-primary-50 border border-primary-100 rounded-xl p-3">
-              <Info size={14} className="text-primary-500 flex-shrink-0 mt-0.5"/>
-              <p className="text-xs text-primary-700">Show your best work. Portfolio images help clients decide. Add real photos from past events for maximum impact.</p>
-            </div>
-            <ImageUploadZone label="Cover Image *" hint="Main image shown in listings — recommended 800×600px"/>
-            <ImageUploadZone label="Portfolio / Gallery" hint="Past work examples — up to 10 images" multiple/>
-          </>}
-
-          {step===2&&<>
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-2">Pricing Type <span className="text-danger-500">*</span></label>
-              <div className="grid grid-cols-3 gap-2">
-                {PRICE_TYPES.map(pt=>(
-                  <button key={pt} onClick={()=>setPriceType(pt)} className={`py-2.5 px-3 rounded-xl text-xs font-semibold border-2 cursor-pointer transition-all ${priceType===pt?"border-primary-500 bg-primary-50 text-primary-600":"border-surface-200 bg-white text-surface-500 hover:border-surface-300"}`}>{pt}</button>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Base Price <span className="text-danger-500">*</span></label><div className="relative"><span className="absolute left-3 text-sm text-surface-400">$</span><input type="number" placeholder="0.00" className="w-full pl-7 pr-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div></div>
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Max Price</label><div className="relative"><span className="absolute left-3 text-sm text-surface-400">$</span><input type="number" placeholder="0.00" className="w-full pl-7 pr-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div></div>
-            </div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">What's Included</label><textarea placeholder="List everything included in the price: equipment, team, editing, etc…" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none resize-none min-h-[80px]"/></div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Add-ons / Extras</label><textarea placeholder="Optional extras clients can add: extra hours, rush delivery, etc…" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none resize-none min-h-[72px]"/></div>
-          </>}
-
-          {step===3&&<>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Min Group Size</label><input type="number" placeholder="1" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-              <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Max Group Size</label><input type="number" placeholder="e.g. 200" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-            </div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Advance Booking Required</label><input placeholder="e.g. At least 7 days in advance" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">Cancellation Policy</label><textarea placeholder="Describe your cancellation and refund policy…" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none resize-none min-h-[80px]"/></div>
-            <div className="flex items-center justify-between p-4 bg-surface-50 rounded-xl border border-surface-200">
-              <div><p className="text-sm font-semibold text-surface-800">Accept Custom Requests</p><p className="text-xs text-surface-400">Allow clients to request custom packages</p></div>
-              <Toggle checked/>
-            </div>
-          </>}
-
-          {step===4&&<>
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-2">Status</label>
-              <div className="flex gap-3">
-                {["active","draft"].map(s=>(
-                  <button key={s} onClick={()=>setStatus(s)} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 cursor-pointer transition-all ${status===s?"border-primary-500 bg-primary-50 text-primary-600":"border-surface-200 bg-white text-surface-500 hover:border-surface-300"}`}>{s}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-surface-50 rounded-xl border border-surface-200">
-              <div><p className="text-sm font-semibold text-surface-800">Featured Service</p><p className="text-xs text-surface-400">Highlight in your store's featured section</p></div>
-              <Toggle/>
-            </div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">SEO Title</label><input placeholder="Service name — Your Store" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none"/></div>
-            <div><label className="block text-xs font-semibold text-surface-700 mb-1.5">SEO Description</label><textarea placeholder="Brief description for search engines…" className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white placeholder:text-surface-400 outline-none resize-none min-h-[72px]"/></div>
-          </>}
-        </div>
-        <div className="px-6 py-4 border-t border-surface-100 flex items-center justify-between bg-surface-50">
-          <button onClick={()=>step>0?setStep(s=>s-1):onClose()} className="px-5 py-2.5 rounded-xl border border-surface-200 text-sm font-medium text-surface-600 hover:bg-surface-100 cursor-pointer bg-white transition-colors">{step===0?"Cancel":"← Back"}</button>
-          <div className="flex gap-2">
-            {step===STEPS.length-1?<>
-              <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-surface-200 text-sm font-medium text-surface-600 hover:bg-surface-100 cursor-pointer bg-white">Save Draft</button>
-              <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 cursor-pointer border-none">Publish Service</button>
-            </>:<button onClick={()=>setStep(s=>s+1)} className="px-5 py-2.5 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 cursor-pointer border-none">Continue →</button>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+function getInitialTrans(translations, locale) {
+  const t = (translations || []).find(t => t.locale === locale) || {};
+  return {
+    name:              t.name              || "",
+    description:       t.description       || "",
+    short_description: t.short_description || t.short_desc || "",
+  };
 }
 
-export default function VendorServices() {
-  const [showAdd,setShowAdd]=useState(false);
+/* ─── Full-page service editor ───────────────────────────────────────────── */
+function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate }) {
+  const isNew = !initial?.id;
+  const [serviceId, setServiceId] = useState(initial?.id || null);
+  const [images, setImages]       = useState(initial?.images || []);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [activeLang, setActiveLang] = useState("en");
+  const [form, setForm] = useState({
+    name:              initial?.name              || "",
+    description:       initial?.description       || "",
+    short_description: initial?.short_description || initial?.short_desc || "",
+    category_id:       initial?.category_id       || "",
+    pricing_type:      initial?.pricing_type      || "fixed",
+    base_price:        initial?.base_price        ?? "",
+    currency:          initial?.currency          || "AMD",
+    duration_hours:    initial?.duration_hours ?? initial?.duration_hrs ?? "",
+    tags:              initial?.tags              || [],
+    service_area:      initial?.service_area      || [],
+    status:            initial?.status            || "draft",
+    is_featured:       initial?.is_featured       || false,
+  });
+  const [transForm, setTransForm] = useState({
+    hy: getInitialTrans(initial?.translations, "hy"),
+    ru: getInitialTrans(initial?.translations, "ru"),
+  });
+
+  const set = (k, v) => { setSaved(false); setForm(f => ({ ...f, [k]: v })); };
+  const setTrans = (locale, k, v) => {
+    setSaved(false);
+    setTransForm(f => ({ ...f, [locale]: { ...f[locale], [k]: v } }));
+  };
+
+  const buildPayload = (status) => ({
+    name:              form.name.trim(),
+    description:       form.description,
+    short_description: form.short_description,
+    pricing_type:      form.pricing_type,
+    base_price:        form.base_price !== "" ? parseFloat(form.base_price) : null,
+    currency:          form.currency || "AMD",
+    duration_hours:    form.duration_hours !== "" ? parseFloat(form.duration_hours) : null,
+    tags:              form.tags,
+    service_area:      form.service_area,
+    status:            status || form.status,
+    is_featured:       form.is_featured,
+    ...(form.category_id ? { category_id: form.category_id } : {}),
+  });
+
+  const handleSave = async (statusOverride) => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      const payload = buildPayload(statusOverride);
+      let sid = serviceId || initial?.id;
+      if (isNew && !serviceId) {
+        const res = await onCreate(payload);
+        sid = res?.data?.id;
+        if (sid) setServiceId(sid);
+      } else {
+        await onUpdate(sid, payload);
+      }
+      // Save HY / RU translations
+      if (sid) {
+        await Promise.all(
+          ["hy", "ru"]
+            .filter(loc => transForm[loc].name || transForm[loc].description || transForm[loc].short_description)
+            .map(loc =>
+              vendorAPI.upsertServiceTranslation(sid, loc, { ...transForm[loc] }).catch(() => {})
+            )
+        );
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      console.error(e);
+      alert("Save failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const currentTrans = activeLang !== "en" ? transForm[activeLang] : null;
+
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar title="My Services" subtitle={`${SERVICES.length} services`} actions={
-        <button onClick={()=>setShowAdd(true)} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none">
-          <Plus size={15}/> Add Service
+      {/* ── Header ── */}
+      <div className="bg-white border-b border-surface-200 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm font-medium text-surface-600 hover:text-surface-900 cursor-pointer border-none bg-transparent transition-colors"
+        >
+          <ArrowLeft size={15} /> Back to Services
         </button>
-      }/>
-      <div className="flex-1 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {SERVICES.map(svc=>(
-            <div key={svc.id} className="bg-white rounded-xl border border-surface-200 overflow-hidden hover:shadow-elevated transition-all group">
-              <div className={`h-40 bg-gradient-to-br ${svc.gradient} relative`}>
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all"/>
-                <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
-                  <button className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Pencil size={12} className="text-surface-600"/></button>
-                  <button className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Trash2 size={12} className="text-danger-500"/></button>
-                </div>
-                <span className={`absolute top-3 left-3 badge ${svc.status==="active"?"badge-success":"badge-gray"} text-[10px]`}>{svc.status}</span>
-              </div>
-              <div className="p-4">
-                <p className="text-[11px] text-surface-400 mb-0.5">{svc.category}</p>
-                <p className="text-sm font-semibold text-surface-800 mb-3 leading-snug">{svc.name}</p>
-                <div className="flex items-center gap-3 text-xs text-surface-500 mb-3">
-                  <span className="flex items-center gap-1"><Clock size={11}/>{svc.duration}</span>
-                  <span className="flex items-center gap-1"><Users size={11}/>{svc.bookings} bookings</span>
-                  <span className="flex items-center gap-1"><Star size={11} className="fill-warm-400 text-warm-400"/>{svc.rating}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-bold text-surface-900">{svc.price}</span>
-                  <button className="px-3 py-1.5 text-xs font-semibold text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 cursor-pointer border-none">Edit</button>
-                </div>
-              </div>
-            </div>
-          ))}
-          <button onClick={()=>setShowAdd(true)} className="border-2 border-dashed border-surface-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer bg-transparent min-h-[240px]">
-            <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center"><Plus size={20} className="text-surface-400"/></div>
-            <p className="text-sm font-medium text-surface-400">Add Service</p>
+        <h2 className="text-sm font-bold text-surface-900">
+          {isNew ? "New Service" : `Edit: ${initial.name}`}
+        </h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleSave("draft")}
+            disabled={saving || !form.name.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-surface-700 bg-white border border-surface-200 rounded-lg hover:bg-surface-50 cursor-pointer disabled:opacity-40 transition-colors"
+          >
+            <Save size={14} /> {saving ? "Saving…" : "Save Draft"}
+          </button>
+          <button
+            onClick={() => handleSave("active")}
+            disabled={saving || !form.name.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
+          >
+            <Send size={14} /> {saved ? "Saved!" : "Publish"}
           </button>
         </div>
       </div>
-      {showAdd&&<AddServiceModal onClose={()=>setShowAdd(false)}/>}
+
+      {/* ── Two-column layout ── */}
+      <div className="flex-1 flex gap-5 p-6 max-w-[1200px] w-full mx-auto">
+
+        {/* Left — form sections */}
+        <div className="flex-1 space-y-4 min-w-0">
+
+          <Section title="Basic Information" icon={Briefcase} defaultOpen>
+            {/* Language tabs */}
+            <div className="flex gap-1.5 pt-1">
+              {LANGS.map(lang => (
+                <button
+                  key={lang.code}
+                  onClick={() => setActiveLang(lang.code)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                    activeLang === lang.code
+                      ? "bg-primary-600 text-white shadow-sm"
+                      : "bg-surface-100 text-surface-500 hover:bg-surface-200"
+                  }`}
+                >
+                  {lang.flag} {lang.label}
+                </button>
+              ))}
+              {activeLang !== "en" && (
+                <span className="ml-auto text-[11px] text-surface-400 self-center">
+                  Translation — will be saved alongside English
+                </span>
+              )}
+            </div>
+
+            {/* EN fields */}
+            {activeLang === "en" && (
+              <>
+                <Inp label="Service Name" required placeholder="e.g. Wedding Photography Package" value={form.name} onChange={e => set("name", e.target.value)} />
+                <div>
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">Description</label>
+                  <RichTextEditor
+                    value={form.description}
+                    onChange={v => set("description", v)}
+                    placeholder="Describe what's included in this service…"
+                    minHeight={110}
+                  />
+                </div>
+                <Inp label="Short Description" placeholder="One-liner shown in listings" value={form.short_description} onChange={e => set("short_description", e.target.value)} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-surface-700 mb-1.5">Category</label>
+                    <select
+                      value={form.category_id}
+                      onChange={e => set("category_id", e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer focus:border-primary-400"
+                    >
+                      <option value="">Select category…</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+                    </select>
+                  </div>
+                  <Inp
+                    label="Duration"
+                    placeholder="e.g. 4"
+                    type="number"
+                    suffix="hours"
+                    value={form.duration_hours}
+                    onChange={e => set("duration_hours", e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* HY / RU translation fields */}
+            {activeLang !== "en" && currentTrans && (
+              <>
+                <Inp
+                  label={`Service Name (${activeLang.toUpperCase()})`}
+                  placeholder={activeLang === "hy" ? "Ծառայության անվանում հայերեն" : "Название услуги на русском"}
+                  value={currentTrans.name}
+                  onChange={e => setTrans(activeLang, "name", e.target.value)}
+                />
+                <div>
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                    Description ({activeLang.toUpperCase()})
+                  </label>
+                  <RichTextEditor
+                    value={currentTrans.description}
+                    onChange={v => setTrans(activeLang, "description", v)}
+                    placeholder={activeLang === "hy" ? "Նկարագրություն հայերեն…" : "Описание на русском…"}
+                    minHeight={110}
+                  />
+                </div>
+                <Inp
+                  label={`Short Description (${activeLang.toUpperCase()})`}
+                  placeholder={activeLang === "hy" ? "Կարճ նկարագրություն" : "Краткое описание"}
+                  value={currentTrans.short_description}
+                  onChange={e => setTrans(activeLang, "short_description", e.target.value)}
+                />
+              </>
+            )}
+          </Section>
+
+          <Section title="Tags & Coverage" icon={Tag} defaultOpen>
+            <TagInput label="Tags" value={form.tags} onChange={v => set("tags", v)} />
+            <TagInput label="Service Areas" value={form.service_area} onChange={v => set("service_area", v)} />
+          </Section>
+
+          <Section title="Pricing" icon={DollarSign} defaultOpen>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-2">Pricing Type</label>
+              <div className="grid grid-cols-4 gap-2">
+                {PRICING_TYPES.map(pt => (
+                  <button
+                    key={pt.value}
+                    onClick={() => set("pricing_type", pt.value)}
+                    className={`py-2 px-2 rounded-xl text-xs font-semibold border-2 cursor-pointer transition-all ${
+                      form.pricing_type === pt.value
+                        ? "border-primary-500 bg-primary-50 text-primary-600"
+                        : "border-surface-200 bg-white text-surface-500 hover:border-surface-300"
+                    }`}
+                  >
+                    {pt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Inp label="Base Price" placeholder="0" prefix={form.currency} type="number" value={form.base_price} onChange={e => set("base_price", e.target.value)} />
+              <div>
+                <label className="block text-xs font-semibold text-surface-700 mb-1.5">Currency</label>
+                <select
+                  value={form.currency}
+                  onChange={e => set("currency", e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer focus:border-primary-400"
+                >
+                  {["AMD", "USD", "EUR", "RUB"].map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+          </Section>
+        </div>
+
+        {/* Right sidebar */}
+        <div className="w-[320px] flex-shrink-0 space-y-4">
+
+          {/* Status + actions */}
+          <div className="bg-white rounded-2xl border border-surface-200 p-4">
+            <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Visibility</p>
+            <div className="flex gap-2 mb-4">
+              {["draft", "active"].map(s => (
+                <button
+                  key={s}
+                  onClick={() => set("status", s)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 cursor-pointer transition-all ${
+                    form.status === s
+                      ? s === "active"
+                        ? "border-success-400 text-success-600 bg-white shadow-sm"
+                        : "border-surface-300 text-surface-600 bg-white shadow-sm"
+                      : "border-surface-100 text-surface-400 bg-surface-50 hover:border-surface-200"
+                  }`}
+                >
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {/* Featured toggle */}
+            <div className="flex items-center justify-between py-3 border-t border-surface-100">
+              <div>
+                <p className="text-xs font-semibold text-surface-700">Featured</p>
+                <p className="text-[11px] text-surface-400">Highlight in store</p>
+              </div>
+              <button
+                onClick={() => set("is_featured", !form.is_featured)}
+                style={{ width: 36, height: 20 }}
+                className={`relative rounded-full cursor-pointer border-none flex-shrink-0 transition-colors ${form.is_featured ? "bg-primary-600" : "bg-surface-200"}`}
+              >
+                <span className={`absolute top-[3px] w-3.5 h-3.5 bg-white rounded-full shadow-sm transition-all ${form.is_featured ? "left-[19px]" : "left-[3px]"}`} />
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <button
+                onClick={() => handleSave("active")}
+                disabled={saving || !form.name.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40 transition-colors"
+              >
+                <Send size={14} /> {saving ? "Saving…" : saved ? "Saved!" : "Save & Publish"}
+              </button>
+              <button
+                onClick={() => handleSave("draft")}
+                disabled={saving || !form.name.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-surface-50 text-surface-700 text-sm font-semibold rounded-xl border border-surface-200 hover:bg-surface-100 cursor-pointer disabled:opacity-40 transition-colors"
+              >
+                <Save size={14} /> Save as Draft
+              </button>
+            </div>
+          </div>
+
+          {/* Images */}
+          <div className="bg-white rounded-2xl border border-surface-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">Images</p>
+              {images.length > 0 && <span className="text-[11px] text-surface-400">{images.length} uploaded</span>}
+            </div>
+            {!serviceId && (
+              <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <p className="text-[11px] text-amber-700 font-medium">Save the service first to unlock image upload</p>
+              </div>
+            )}
+            <ImageManager
+              entityId={serviceId}
+              type="service"
+              images={images}
+              onChange={setImages}
+            />
+          </div>
+
+          {/* Summary */}
+          {(form.name || form.base_price) && (
+            <div className="bg-surface-50 rounded-2xl border border-surface-200 p-4">
+              <p className="text-xs font-bold text-surface-700 uppercase tracking-wider mb-3">Summary</p>
+              <div className="space-y-2 text-xs text-surface-600">
+                {form.name && <div className="flex justify-between"><span className="text-surface-400">Name</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
+                {form.base_price && <div className="flex justify-between"><span className="text-surface-400">Price</span><span className="font-medium">{form.currency} {parseFloat(form.base_price).toLocaleString()}</span></div>}
+                {form.duration_hours && <div className="flex justify-between"><span className="text-surface-400">Duration</span><span className="font-medium">{form.duration_hours}h</span></div>}
+                <div className="flex justify-between"><span className="text-surface-400">Images</span><span className="font-medium">{images.length}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-surface-400">Languages</span>
+                  <span className="font-medium text-primary-600">
+                    EN{transForm.hy?.name ? " · HY" : ""}{transForm.ru?.name ? " · RU" : ""}
+                  </span>
+                </div>
+                <div className="flex justify-between"><span className="text-surface-400">Status</span>
+                  <span className={`font-bold ${form.status === "active" ? "text-success-600" : "text-surface-500"}`}>{form.status}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── List page ──────────────────────────────────────────────────────────── */
+export default function VendorServices() {
+  const searchParams = useSearchParams();
+  const [mode, setMode]             = useState("list");
+  const [editService, setEditService] = useState(null);
+  const [services, setServices]     = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filterCat, setFilterCat]   = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  const fetchServices = useCallback(() => {
+    return vendorAPI.services({ limit: 100 })
+      .then(res => { setServices(res?.data || []); return res?.data || []; })
+      .catch(() => [])
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch full service (with images + translations) then open editor
+  const openEdit = useCallback(async (serviceOrId) => {
+    const id = typeof serviceOrId === "string" ? serviceOrId : serviceOrId?.id;
+    if (!id) return;
+    try {
+      const res = await vendorAPI.getService(id);
+      setEditService(res?.data || (typeof serviceOrId === "object" ? serviceOrId : null));
+    } catch {
+      setEditService(typeof serviceOrId === "object" ? serviceOrId : null);
+    }
+    setMode("edit");
+  }, []);
+
+  useEffect(() => {
+    const editId = searchParams?.get("edit");
+    fetchServices().then(() => {
+      if (editId) openEdit(editId);
+    });
+    adminCategoriesAPI.list().then(res => setCategories(res?.data || [])).catch(() => {});
+  }, []);
+
+  const handleCreate = async (data) => {
+    const res = await vendorAPI.createService(data);
+    fetchServices();
+    return res;
+  };
+
+  const handleUpdate = async (id, data) => {
+    await vendorAPI.updateService(id, data);
+    fetchServices();
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this service?")) return;
+    try {
+      await vendorAPI.deleteService(id);
+      setServices(prev => prev.filter(s => s.id !== id));
+    } catch (e) { console.error(e); }
+  };
+
+  const handlePublish   = async (id) => { try { await vendorAPI.publishService(id);   setServices(prev => prev.map(s => s.id === id ? { ...s, status: "active" } : s)); } catch (e) { console.error(e); } };
+  const handleUnpublish = async (id) => { try { await vendorAPI.unpublishService(id); setServices(prev => prev.map(s => s.id === id ? { ...s, status: "draft" }  : s)); } catch (e) { console.error(e); } };
+
+  const goBack = () => { setMode("list"); setEditService(null); fetchServices(); };
+
+  if (mode === "create") return <ServiceEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} />;
+  if (mode === "edit" && editService) return <ServiceEditor initial={editService} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} />;
+
+  const filtered = services.filter(s => {
+    if (filterCat && s.category_id !== filterCat) return false;
+    if (filterStatus && s.status !== filterStatus) return false;
+    return true;
+  });
+
+  return (
+    <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
+      <TopBar
+        title="My Services"
+        subtitle={loading ? "Loading…" : `${filtered.length} of ${services.length} services`}
+        actions={
+          <button onClick={() => setMode("create")} className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none">
+            <Plus size={15} /> Add Service
+          </button>
+        }
+      />
+
+      <div className="px-6 pt-4 pb-2 flex items-center gap-3">
+        <Filter size={14} className="text-surface-400" />
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
+          className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="draft">Draft</option>
+        </select>
+        {(filterCat || filterStatus) && (
+          <button onClick={() => { setFilterCat(""); setFilterStatus(""); }} className="text-xs text-primary-600 hover:underline cursor-pointer border-none bg-transparent">Clear</button>
+        )}
+      </div>
+
+      <div className="flex-1 p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading services…</div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <p className="text-sm text-surface-400">{services.length === 0 ? "No services yet." : "No services match filters."}</p>
+            {services.length === 0 && (
+              <button onClick={() => setMode("create")} className="px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 cursor-pointer border-none">
+                Add your first service
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((svc, idx) => {
+              const thumb = svc.thumbnail_url || svc.images?.find(i => i.is_primary)?.url || svc.images?.[0]?.url;
+              return (
+                <div key={svc.id} className="bg-white rounded-xl border border-surface-200 overflow-hidden hover:shadow-elevated transition-all group">
+                  <div className={`h-40 relative ${!thumb ? `bg-gradient-to-br ${GRADIENTS[idx % GRADIENTS.length]}` : ""}`}>
+                    {thumb && <img src={thumb} alt={svc.name} className="w-full h-full object-cover" />}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
+                    <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => openEdit(svc)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Pencil size={12} className="text-primary-600" /></button>
+                      <button onClick={() => handleDelete(svc.id)} className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shadow-card cursor-pointer border-none"><Trash2 size={12} className="text-danger-500" /></button>
+                    </div>
+                    <span className={`absolute top-3 left-3 badge ${svc.status === "active" ? "badge-success" : "badge-gray"} text-[10px]`}>{svc.status}</span>
+                    <div className="absolute bottom-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      {svc.status !== "active"
+                        ? <button onClick={() => handlePublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-primary-600 rounded-lg cursor-pointer border-none shadow-card"><Eye size={10} />Publish</button>
+                        : <button onClick={() => handleUnpublish(svc.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white text-surface-600 rounded-lg cursor-pointer border-none shadow-card"><EyeOff size={10} />Unpublish</button>
+                      }
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-xs text-surface-400 mb-1">{svc.category_name || categories.find(c => c.id === svc.category_id)?.name || "—"}</p>
+                    <p className="text-sm font-semibold text-surface-800 mb-3 leading-snug line-clamp-2">{svc.name}</p>
+                    <div className="flex items-center gap-3 text-xs text-surface-500 mb-3">
+                      {(svc.duration_hours > 0 || svc.duration_hrs > 0) && (
+                        <span className="flex items-center gap-1"><Clock size={11} />{svc.duration_hours || svc.duration_hrs}h</span>
+                      )}
+                      {svc.review_count > 0 && (
+                        <span className="flex items-center gap-1"><Star size={11} className="fill-warning-400 text-warning-400" />{svc.rating?.toFixed(1)}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-bold text-surface-900">{svc.currency || "AMD"} {Number(svc.base_price || 0).toLocaleString()}</span>
+                      <span className="text-xs text-surface-400 capitalize">{PRICING_TYPES.find(p => p.value === svc.pricing_type)?.label || svc.pricing_type || ""}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={() => setMode("create")}
+              className="border-2 border-dashed border-surface-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer bg-transparent min-h-[240px]">
+              <div className="w-10 h-10 rounded-xl bg-surface-100 flex items-center justify-center"><Plus size={20} className="text-surface-400" /></div>
+              <p className="text-sm font-medium text-surface-400">Add Service</p>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

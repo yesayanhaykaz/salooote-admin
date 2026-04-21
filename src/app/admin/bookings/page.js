@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   CalendarCheck, CheckCircle2, Clock, XCircle, Star,
   Download, Search, X, Phone, Mail, MapPin, Users,
@@ -8,7 +8,7 @@ import {
 import TopBar from "@/components/TopBar";
 import StatsCard from "@/components/StatsCard";
 import DataTable from "@/components/DataTable";
-import { SAMPLE_BOOKINGS } from "@/lib/data";
+import { adminBookingsAPI } from "@/lib/api";
 
 const AVATAR_COLORS = [
   "bg-pink-500", "bg-violet-500", "bg-blue-500", "bg-green-500",
@@ -34,11 +34,11 @@ const STATUS_BADGE = {
 };
 
 const EVENT_BADGE = {
-  Wedding:      "badge badge-purple",
-  Birthday:     "badge badge-info",
-  Christening:  "badge badge-success",
+  Wedding:       "badge badge-purple",
+  Birthday:      "badge badge-info",
+  Christening:   "badge badge-success",
   "Office Event":"badge badge-gray",
-  Engagement:   "badge badge-warning",
+  Engagement:    "badge badge-warning",
 };
 
 const TIMELINE_STEPS = [
@@ -58,6 +58,12 @@ const STATUS_TO_STEP = {
   cancelled:   -1,
 };
 
+function fmt(dateStr) {
+  if (!dateStr) return "—";
+  try { return new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); }
+  catch { return dateStr; }
+}
+
 function StatusBadge({ status }) {
   return (
     <span className={STATUS_BADGE[status] || "badge badge-gray"}>
@@ -69,15 +75,34 @@ function StatusBadge({ status }) {
 function EventBadge({ event }) {
   return (
     <span className={EVENT_BADGE[event] || "badge badge-gray"}>
-      {event}
+      {event || "—"}
     </span>
   );
 }
 
-function BookingDrawer({ booking, onClose }) {
+function BookingDrawer({ booking, onClose, onStatusUpdate }) {
   const [selectedStatus, setSelectedStatus] = useState(booking.status);
+  const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
   const activeStep = STATUS_TO_STEP[booking.status] ?? 0;
+
+  const customerName = booking.user_name || booking.user?.first_name || "Unknown";
+  const vendorName   = booking.vendor?.business_name || "—";
+  const serviceName  = booking.service?.name || "—";
+
+  async function handleSave() {
+    if (selectedStatus === booking.status) return;
+    setSaving(true);
+    try {
+      await adminBookingsAPI.updateStatus(booking.id, selectedStatus);
+      onStatusUpdate(booking.id, selectedStatus);
+      onClose();
+    } catch (e) {
+      alert(e.message || "Failed to update status");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -90,7 +115,7 @@ function BookingDrawer({ booking, onClose }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200 sticky top-0 bg-white z-10">
           <div>
             <p className="text-xs text-surface-400 font-medium">Booking Detail</p>
-            <h2 className="text-base font-bold text-surface-900">{booking.id}</h2>
+            <h2 className="text-base font-bold text-surface-900 truncate max-w-[200px]">{booking.id}</h2>
           </div>
           <button
             onClick={onClose}
@@ -143,21 +168,11 @@ function BookingDrawer({ booking, onClose }) {
             <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide">Customer</p>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-white">{booking.customer.charAt(0)}</span>
+                <span className="text-sm font-bold text-white">{customerName.charAt(0)}</span>
               </div>
               <div>
-                <p className="text-sm font-semibold text-surface-800">{booking.customer}</p>
+                <p className="text-sm font-semibold text-surface-800">{customerName}</p>
                 <p className="text-xs text-surface-400">Customer account</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="flex items-center gap-2 text-xs text-surface-500">
-                <Phone size={12} className="text-surface-400" />
-                <span>+374 91 000 000</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-surface-500">
-                <Mail size={12} className="text-surface-400" />
-                <span>customer@example.com</span>
               </div>
             </div>
           </div>
@@ -167,11 +182,11 @@ function BookingDrawer({ booking, onClose }) {
             <p className="text-xs font-semibold text-surface-500 uppercase tracking-wide">Vendor</p>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-violet-500 flex items-center justify-center flex-shrink-0">
-                <span className="text-sm font-bold text-white">{booking.vendor.charAt(0)}</span>
+                <span className="text-sm font-bold text-white">{vendorName.charAt(0)}</span>
               </div>
               <div>
-                <p className="text-sm font-semibold text-surface-800">{booking.vendor}</p>
-                <p className="text-xs text-surface-400">{booking.service}</p>
+                <p className="text-sm font-semibold text-surface-800">{vendorName}</p>
+                <p className="text-xs text-surface-400">{serviceName}</p>
               </div>
             </div>
           </div>
@@ -182,37 +197,39 @@ function BookingDrawer({ booking, onClose }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Event Type</p>
-                <EventBadge event={booking.event} />
+                <EventBadge event={booking.event_type} />
               </div>
               <div>
                 <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Event Date</p>
-                <p className="text-sm font-semibold text-surface-700">{booking.eventDate}</p>
+                <p className="text-sm font-semibold text-surface-700">{fmt(booking.event_date)}</p>
               </div>
               <div>
                 <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Guests</p>
                 <div className="flex items-center gap-1.5">
                   <Users size={12} className="text-surface-400" />
-                  <p className="text-sm font-semibold text-surface-700">{booking.guests}</p>
+                  <p className="text-sm font-semibold text-surface-700">{booking.guest_count ?? "—"}</p>
                 </div>
               </div>
               <div>
                 <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Budget</p>
                 <div className="flex items-center gap-1.5">
                   <DollarSign size={12} className="text-surface-400" />
-                  <p className="text-sm font-bold text-surface-900">{booking.budget}</p>
+                  <p className="text-sm font-bold text-surface-900">{booking.budget ? `$${booking.budget}` : "—"}</p>
                 </div>
               </div>
               <div className="col-span-2">
                 <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Location</p>
                 <div className="flex items-center gap-1.5">
                   <MapPin size={12} className="text-surface-400" />
-                  <p className="text-sm text-surface-600">{booking.city}</p>
+                  <p className="text-sm text-surface-600">{booking.location || "—"}</p>
                 </div>
               </div>
-              <div className="col-span-2">
-                <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Special Requests</p>
-                <p className="text-sm text-surface-500 italic">No special requests noted.</p>
-              </div>
+              {booking.notes && (
+                <div className="col-span-2">
+                  <p className="text-[10px] text-surface-400 uppercase tracking-wide mb-0.5">Notes</p>
+                  <p className="text-sm text-surface-500 italic">{booking.notes}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -242,8 +259,12 @@ function BookingDrawer({ booking, onClose }) {
                 rows={3}
                 className="w-full border border-surface-200 rounded-lg px-3 py-2 text-sm text-surface-700 resize-none focus:outline-none focus:border-primary-400 placeholder:text-surface-300"
               />
-              <button className="w-full py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors cursor-pointer border-0">
-                Save Changes
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition-colors cursor-pointer border-0 disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Save Changes"}
               </button>
             </div>
 
@@ -268,24 +289,50 @@ function BookingDrawer({ booking, onClose }) {
 }
 
 export default function BookingsPage() {
-  const [activeTab, setActiveTab] = useState("all");
-  const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [bookings, setBookings]       = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [activeTab, setActiveTab]     = useState("all");
+  const [search, setSearch]           = useState("");
+  const [dateFrom, setDateFrom]       = useState("");
+  const [dateTo, setDateTo]           = useState("");
   const [selectedBooking, setSelectedBooking] = useState(null);
 
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { limit: 200, page: 1 };
+      if (activeTab !== "all") params.status = activeTab;
+      const res = await adminBookingsAPI.list(params);
+      setBookings(res?.data?.items || res?.data || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
+
+  function handleStatusUpdate(id, status) {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b));
+  }
+
   const counts = {
-    all:       SAMPLE_BOOKINGS.length,
-    new:       SAMPLE_BOOKINGS.filter(b => b.status === "new").length,
-    pending:   SAMPLE_BOOKINGS.filter(b => b.status === "pending").length,
-    confirmed: SAMPLE_BOOKINGS.filter(b => b.status === "confirmed").length,
-    cancelled: SAMPLE_BOOKINGS.filter(b => b.status === "cancelled").length,
-    completed: SAMPLE_BOOKINGS.filter(b => b.status === "completed").length,
+    all:       bookings.length,
+    new:       bookings.filter(b => b.status === "new").length,
+    pending:   bookings.filter(b => b.status === "pending").length,
+    confirmed: bookings.filter(b => b.status === "confirmed").length,
+    cancelled: bookings.filter(b => b.status === "cancelled").length,
+    completed: bookings.filter(b => b.status === "completed").length,
   };
 
-  const filtered = SAMPLE_BOOKINGS.filter(b => {
-    if (activeTab !== "all" && b.status !== activeTab) return false;
-    if (search && !`${b.id} ${b.customer} ${b.vendor} ${b.service}`.toLowerCase().includes(search.toLowerCase())) return false;
+  const filtered = bookings.filter(b => {
+    if (search) {
+      const name = b.user_name || b.user?.first_name || "";
+      const vendor = b.vendor?.business_name || "";
+      const service = b.service?.name || "";
+      if (!`${b.id} ${name} ${vendor} ${service}`.toLowerCase().includes(search.toLowerCase())) return false;
+    }
     return true;
   });
 
@@ -294,51 +341,49 @@ export default function BookingsPage() {
       key: "id",
       label: "Booking ID",
       sortable: true,
-      render: (val) => <span className="text-sm font-bold text-primary-600">{val}</span>,
+      render: (val) => <span className="text-xs font-bold text-primary-600 truncate max-w-[100px] block">{val}</span>,
     },
     {
-      key: "customer",
+      key: "user_name",
       label: "Customer",
       sortable: true,
-      render: (val, row) => (
-        <div className="flex items-center gap-2.5">
-          <div className={`w-8 h-8 rounded-full ${AVATAR_COLORS[row.id?.replace(/\D/g,"") % AVATAR_COLORS.length || 0]} flex items-center justify-center flex-shrink-0`}>
-            <span className="text-xs font-bold text-white">{val.charAt(0)}</span>
+      render: (val, row) => {
+        const name = val || row.user?.first_name || "Unknown";
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-full ${AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]} flex items-center justify-center flex-shrink-0`}>
+              <span className="text-xs font-bold text-white">{name.charAt(0)}</span>
+            </div>
+            <span className="text-sm font-semibold text-surface-800">{name}</span>
           </div>
-          <span className="text-sm font-semibold text-surface-800">{val}</span>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "vendor",
       label: "Vendor",
-      render: (val) => <span className="text-sm text-surface-600">{val}</span>,
+      render: (val) => <span className="text-sm text-surface-600">{val?.business_name || "—"}</span>,
     },
     {
-      key: "service",
-      label: "Service",
-      render: (val) => <span className="text-sm text-surface-600 max-w-[160px] truncate block">{val}</span>,
-    },
-    {
-      key: "event",
+      key: "event_type",
       label: "Event Type",
       render: (val) => <EventBadge event={val} />,
     },
     {
-      key: "eventDate",
+      key: "event_date",
       label: "Event Date",
       sortable: true,
-      render: (val) => <span className="text-xs text-surface-500">{val}</span>,
+      render: (val) => <span className="text-xs text-surface-500">{fmt(val)}</span>,
     },
     {
-      key: "guests",
+      key: "guest_count",
       label: "Guests",
-      render: (val) => <span className="text-sm font-semibold text-surface-700">{val}</span>,
+      render: (val) => <span className="text-sm font-semibold text-surface-700">{val ?? "—"}</span>,
     },
     {
       key: "budget",
       label: "Budget",
-      render: (val) => <span className="text-sm font-bold text-surface-900">{val}</span>,
+      render: (val) => <span className="text-sm font-bold text-surface-900">{val ? `$${val}` : "—"}</span>,
     },
     {
       key: "status",
@@ -375,11 +420,11 @@ export default function BookingsPage() {
       <div className="flex-1 p-6 space-y-6">
         {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
-          <StatsCard label="Total Bookings" value="889" icon={CalendarCheck} iconBg="bg-violet-50" iconColor="text-violet-500" />
-          <StatsCard label="Confirmed"      value="412" icon={CheckCircle2}  iconBg="bg-green-50"  iconColor="text-green-500"  />
-          <StatsCard label="Pending"        value="203" icon={Clock}         iconBg="bg-amber-50"  iconColor="text-amber-500"  />
-          <StatsCard label="Cancelled"      value="87"  icon={XCircle}       iconBg="bg-red-50"    iconColor="text-red-500"    />
-          <StatsCard label="Completed"      value="187" icon={Star}          iconBg="bg-blue-50"   iconColor="text-blue-500"   />
+          <StatsCard label="Total Bookings" value={counts.all}       icon={CalendarCheck} iconBg="bg-violet-50" iconColor="text-violet-500" />
+          <StatsCard label="Confirmed"      value={counts.confirmed} icon={CheckCircle2}  iconBg="bg-green-50"  iconColor="text-green-500"  />
+          <StatsCard label="Pending"        value={counts.pending}   icon={Clock}         iconBg="bg-amber-50"  iconColor="text-amber-500"  />
+          <StatsCard label="Cancelled"      value={counts.cancelled} icon={XCircle}       iconBg="bg-red-50"    iconColor="text-red-500"    />
+          <StatsCard label="Completed"      value={counts.completed} icon={Star}          iconBg="bg-blue-50"   iconColor="text-blue-500"   />
         </div>
 
         {/* Filter Bar */}
@@ -406,7 +451,7 @@ export default function BookingsPage() {
             ))}
           </div>
 
-          {/* Search + Date Range + Export */}
+          {/* Search + Date Range */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 w-[260px] gap-2 focus-within:border-primary-400 transition-colors">
               <Search size={14} className="text-surface-400" />
@@ -435,15 +480,21 @@ export default function BookingsPage() {
           </div>
         </div>
 
-        {/* DataTable — rows clickable */}
+        {/* DataTable */}
         <div>
-          <DataTable
-            columns={columns}
-            data={filtered}
-            searchable={false}
-            pageSize={8}
-            searchKeys={["id", "customer", "vendor", "service"]}
-          />
+          {loading ? (
+            <div className="bg-white rounded-xl border border-surface-200 py-16 text-center">
+              <p className="text-sm text-surface-400">Loading bookings…</p>
+            </div>
+          ) : (
+            <DataTable
+              columns={columns}
+              data={filtered}
+              searchable={false}
+              pageSize={8}
+              searchKeys={["id", "user_name", "event_type"]}
+            />
+          )}
         </div>
       </div>
 
@@ -452,6 +503,7 @@ export default function BookingsPage() {
         <BookingDrawer
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
+          onStatusUpdate={handleStatusUpdate}
         />
       )}
     </div>

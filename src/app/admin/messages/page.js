@@ -13,7 +13,7 @@ const SAMPLE_CHATS = {
   ],
   2: [
     { id: 1, text: "I just received my order. Everything looks amazing!",          sent: false, time: "9:15 AM" },
-    { id: 2, text: "Thank you so much! We're glad you love it. 💜",                sent: true,  time: "9:18 AM" },
+    { id: 2, text: "Thank you so much! We're glad you love it.",                   sent: true,  time: "9:18 AM" },
     { id: 3, text: "The delivery was super quick too, thank you!",                 sent: false, time: "9:20 AM" },
     { id: 4, text: "Our pleasure. Let us know if you need anything else.",          sent: true,  time: "9:21 AM" },
   ],

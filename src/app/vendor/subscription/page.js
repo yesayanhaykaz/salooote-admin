@@ -1,100 +1,206 @@
 "use client";
-import { useState } from "react";
-import { Check, Zap, Crown, Star, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Check, Zap, Crown, Star, AlertCircle, CreditCard, X, Save } from "lucide-react";
 import TopBar from "@/components/TopBar";
+import { vendorAPI } from "@/lib/api";
 
-const PLANS = [
-  {
-    key: "basic",
-    name: "Basic",
-    price: 0,
-    period: "Free forever",
-    icon: Star,
-    color: "text-surface-500",
-    border: "border-surface-200",
-    bg: "bg-white",
-    badge: null,
-    features: [
-      "Up to 10 products",
-      "Up to 5 services",
-      "Basic analytics",
-      "Email support",
-      "Standard listing",
-      "1 store photo",
-      "Order management",
-    ],
-    missing: [
-      "Featured placement",
-      "Custom store URL",
-      "Priority support",
-      "Advanced analytics",
-      "API access",
-    ],
-  },
-  {
-    key: "pro",
-    name: "Pro",
-    price: 29,
-    period: "per month",
-    icon: Zap,
-    color: "text-primary-600",
-    border: "border-primary-500",
-    bg: "bg-white",
-    badge: "Most Popular",
-    features: [
-      "Up to 100 products",
-      "Up to 30 services",
-      "Advanced analytics",
-      "Priority support",
-      "Featured listing badge",
-      "Custom store URL",
-      "5 store photos",
-      "Order management",
-      "Discount & promo codes",
-      "Customer reviews tools",
-    ],
-    missing: [
-      "Dedicated account manager",
-      "API access",
-    ],
-  },
-  {
-    key: "premium",
-    name: "Premium",
-    price: 79,
-    period: "per month",
-    icon: Crown,
-    color: "text-amber-500",
-    border: "border-amber-400",
-    bg: "bg-white",
-    badge: "Best Value",
-    features: [
-      "Unlimited products",
-      "Unlimited services",
-      "Full analytics & reports",
-      "24/7 dedicated support",
-      "Top placement in search",
-      "Unlimited store photos",
-      "Custom domain support",
-      "API access",
-      "Bulk product import",
-      "Dedicated account manager",
-      "White-label invoices",
-      "Advanced discount tools",
-    ],
-    missing: [],
-  },
-];
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-const BILLING_HISTORY = [
-  { date: "Mar 1, 2025",  plan: "Pro",   amount: "$29.00", status: "paid" },
-  { date: "Feb 1, 2025",  plan: "Pro",   amount: "$29.00", status: "paid" },
-  { date: "Jan 1, 2025",  plan: "Basic", amount: "$0.00",  status: "free" },
-];
+const PLAN_ICONS  = { basic: Star, pro: Zap, premium: Crown };
+const PLAN_STYLES = {
+  basic:   { icon: "bg-surface-100", color: "text-surface-500", border: "border-surface-200", btn: "bg-white text-surface-700 border border-surface-200 hover:bg-surface-50" },
+  pro:     { icon: "bg-primary-50",  color: "text-primary-600", border: "border-primary-500",  btn: "bg-primary-600 text-white hover:bg-primary-700", badge: "Most Popular" },
+  premium: { icon: "bg-amber-50",    color: "text-amber-500",   border: "border-amber-400",    btn: "bg-amber-400 text-white hover:bg-amber-500",     badge: "Best Value" },
+};
+
+const STATUS_BADGE = {
+  completed: "badge-success",
+  paid:      "badge-success",
+  pending:   "badge-warning",
+  failed:    "badge-danger",
+  refunded:  "badge-gray",
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtAMD(n) {
+  return Number(n || 0).toLocaleString() + " AMD";
+}
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+// ─── Payment Method Modal ────────────────────────────────────────────────────
+
+function PaymentMethodModal({ initial, onClose, onSave }) {
+  const [form, setForm] = useState({
+    card_holder: "",
+    card_number: "",
+    expiry: "",
+    cvv: "",
+    ...initial,
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const formatCardNumber = (val) => {
+    const digits = val.replace(/\D/g, "").slice(0, 16);
+    return digits.replace(/(.{4})/g, "$1 ").trim();
+  };
+  const formatExpiry = (val) => {
+    const digits = val.replace(/\D/g, "").slice(0, 4);
+    if (digits.length >= 3) return digits.slice(0, 2) + "/" + digits.slice(2);
+    return digits;
+  };
+
+  const handleSave = async () => {
+    if (!form.card_number || !form.expiry || !form.card_holder) return;
+    setSaving(true);
+    try {
+      // Store masked version — never store full CVV
+      const masked = {
+        card_holder: form.card_holder,
+        last4: form.card_number.replace(/\s/g, "").slice(-4),
+        expiry: form.expiry,
+        brand: detectBrand(form.card_number),
+      };
+      await onSave(masked);
+      onClose();
+    } catch {}
+    setSaving(false);
+  };
+
+  const detectBrand = (num) => {
+    const n = num.replace(/\s/g, "");
+    if (/^4/.test(n)) return "Visa";
+    if (/^5[1-5]/.test(n)) return "Mastercard";
+    if (/^3[47]/.test(n)) return "Amex";
+    return "Card";
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl w-full max-w-md shadow-elevated">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-100">
+          <h2 className="font-bold text-surface-900">
+            {initial ? "Update Payment Method" : "Add Payment Method"}
+          </h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-surface-100 cursor-pointer border-none bg-transparent">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Cardholder Name</label>
+            <input value={form.card_holder} onChange={e => set("card_holder", e.target.value)}
+              placeholder="Full name as on card"
+              className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Card Number</label>
+            <input value={form.card_number} onChange={e => set("card_number", formatCardNumber(e.target.value))}
+              placeholder="1234 5678 9012 3456" maxLength={19}
+              className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 font-mono" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Expiry</label>
+              <input value={form.expiry} onChange={e => set("expiry", formatExpiry(e.target.value))}
+                placeholder="MM/YY" maxLength={5}
+                className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">CVV</label>
+              <input value={form.cvv} onChange={e => set("cvv", e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="•••" type="password" maxLength={4}
+                className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600" />
+            </div>
+          </div>
+          <p className="text-[11px] text-surface-400">Your card details are encrypted and stored securely. CVV is never saved.</p>
+        </div>
+        <div className="px-6 py-4 border-t border-surface-100 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-surface-200 rounded-lg text-surface-600 hover:bg-surface-50 cursor-pointer bg-white">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !form.card_holder || !form.card_number || !form.expiry}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-primary-600 text-white rounded-lg hover:bg-primary-700 cursor-pointer border-none disabled:opacity-40">
+            <Save size={14} /> {saving ? "Saving…" : "Save Card"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function VendorSubscription() {
-  const [current, setCurrent] = useState("pro");
-  const [billing, setBilling] = useState("monthly");
+  const [current, setCurrent]       = useState(null);
+  const [plans, setPlans]           = useState([]);
+  const [history, setHistory]       = useState([]);
+  const [profile, setProfile]       = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [histLoading, setHistLoading] = useState(true);
+  const [billing, setBilling]       = useState("monthly");
+  const [changing, setChanging]     = useState(null); // slug being applied
+  const [cancelling, setCancelling] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
+
+  const paymentMethod = profile?.payment_method || null;
+
+  useEffect(() => {
+    Promise.all([
+      vendorAPI.subscription().catch(() => null),
+      vendorAPI.subscriptionPlans().catch(() => null),
+      vendorAPI.getProfile().catch(() => null),
+    ]).then(([subRes, plansRes, profileRes]) => {
+      setCurrent(subRes?.data || null);
+      setPlans(plansRes?.data || []);
+      setProfile(profileRes?.data || null);
+    }).finally(() => setLoading(false));
+
+    vendorAPI.billingHistory().catch(() => null).then(res => {
+      setHistory(res?.data || []);
+      setHistLoading(false);
+    });
+  }, []);
+
+  const currentPlanSlug = current?.plan?.slug || null;
+
+  const fmtPrice = (price) => billing === "yearly" ? Math.round(price * 0.8) : price;
+
+  const handleChangePlan = async (slug) => {
+    if (slug === currentPlanSlug) return;
+    const plan = plans.find(p => p.slug === slug);
+    const label = plan?.price === 0 ? "downgrade to" : "upgrade to";
+    if (!confirm(`Are you sure you want to ${label} the ${plan?.name} plan?`)) return;
+    setChanging(slug);
+    try {
+      const res = await vendorAPI.changePlan(slug);
+      if (res?.data) setCurrent(res.data);
+    } catch (e) {
+      alert("Failed to change plan: " + (e?.message || "Unknown error"));
+    }
+    setChanging(null);
+  };
+
+  const handleCancel = async () => {
+    if (!confirm("Are you sure you want to cancel your subscription? You will lose access to paid features at the end of the period.")) return;
+    setCancelling(true);
+    try {
+      await vendorAPI.cancelSubscription();
+      setCurrent(prev => prev ? { ...prev, status: "cancelled" } : prev);
+    } catch (e) {
+      alert("Failed to cancel: " + (e?.message || "Unknown error"));
+    }
+    setCancelling(false);
+  };
+
+  const handleSavePaymentMethod = async (masked) => {
+    await vendorAPI.updateProfile({ payment_method: masked });
+    setProfile(prev => ({ ...prev, payment_method: masked }));
+  };
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
@@ -103,136 +209,158 @@ export default function VendorSubscription() {
       <div className="flex-1 p-6 space-y-6">
 
         {/* Current Plan Banner */}
-        <div className="bg-primary-600 rounded-xl p-5 flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-              <Zap size={20} className="text-white" />
+        {!loading && current && (
+          <div className={`rounded-xl p-5 flex items-center justify-between flex-wrap gap-4 ${
+            current.status === "cancelled" ? "bg-surface-700" : "bg-primary-600"
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Zap size={20} className="text-white" />
+              </div>
+              <div>
+                <p className="text-white font-bold text-base">
+                  {current.plan?.name} Plan
+                  <span className="ml-2 text-xs font-semibold px-2 py-0.5 bg-white/20 rounded-full capitalize">{current.status}</span>
+                </p>
+                <p className="text-white/70 text-xs mt-0.5">
+                  Active since {fmtDate(current.starts_at)}
+                  {current.ends_at ? ` · Expires ${fmtDate(current.ends_at)}` : ""}
+                  {current.cancelled_at ? ` · Cancelled ${fmtDate(current.cancelled_at)}` : ""}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-white font-bold text-base">Pro Plan — Active</p>
-              <p className="text-white/60 text-xs">Next billing on May 1, 2025 · $29.00</p>
-            </div>
+            {current.status === "active" && !current.plan?.is_free && (
+              <button onClick={handleCancel} disabled={cancelling}
+                className="px-4 py-2 bg-white/15 border border-white/25 text-white text-sm font-medium rounded-lg hover:bg-white/25 transition-colors cursor-pointer disabled:opacity-40">
+                {cancelling ? "Cancelling…" : "Cancel Plan"}
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-white/15 border border-white/20 text-white text-sm font-medium rounded-lg hover:bg-white/25 transition-colors cursor-pointer">
-              Cancel Plan
-            </button>
-            <button className="px-4 py-2 bg-white text-primary-600 text-sm font-bold rounded-lg hover:bg-primary-50 transition-colors cursor-pointer border-none">
-              Manage Billing
-            </button>
+        )}
+
+        {!loading && !current && (
+          <div className="bg-warning-50 border border-warning-200 rounded-xl p-4 flex items-center gap-3">
+            <AlertCircle size={18} className="text-warning-500 flex-shrink-0" />
+            <p className="text-sm text-warning-700">You don&apos;t have an active subscription. Choose a plan below to get started.</p>
           </div>
-        </div>
+        )}
 
         {/* Billing toggle */}
         <div className="flex items-center justify-center gap-3">
           <span className={`text-sm font-medium ${billing === "monthly" ? "text-surface-900" : "text-surface-400"}`}>Monthly</span>
-          <button
-            onClick={() => setBilling(b => b === "monthly" ? "yearly" : "monthly")}
-            className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer border-none ${billing === "yearly" ? "bg-primary-600" : "bg-surface-300"}`}
-          >
+          <button onClick={() => setBilling(b => b === "monthly" ? "yearly" : "monthly")}
+            className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer border-none ${billing === "yearly" ? "bg-primary-600" : "bg-surface-300"}`}>
             <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${billing === "yearly" ? "left-7" : "left-1"}`} />
           </button>
           <span className={`text-sm font-medium ${billing === "yearly" ? "text-surface-900" : "text-surface-400"}`}>
-            Yearly <span className="text-success-600 text-xs font-bold">-20%</span>
+            Yearly <span className="text-success-600 text-xs font-bold">−20%</span>
           </span>
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {PLANS.map((plan) => {
-            const Icon = plan.icon;
-            const isCurrentPlan = current === plan.key;
-            const price = billing === "yearly" && plan.price > 0
-              ? Math.round(plan.price * 0.8)
-              : plan.price;
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-sm text-surface-400">Loading plans…</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {plans.map(plan => {
+              const slug  = plan.slug || plan.name?.toLowerCase();
+              const style = PLAN_STYLES[slug] || PLAN_STYLES.basic;
+              const Icon  = PLAN_ICONS[slug] || Star;
+              const isCurrent = currentPlanSlug === slug;
+              const price = fmtPrice(plan.price);
+              const isChanging = changing === slug;
 
-            return (
-              <div
-                key={plan.key}
-                className={`relative rounded-xl border-2 ${isCurrentPlan ? "border-primary-500" : plan.border} bg-white p-6 flex flex-col transition-all hover:shadow-elevated`}
-              >
-                {plan.badge && (
-                  <div className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold ${
-                    plan.key === "pro" ? "bg-primary-600 text-white" : "bg-amber-400 text-white"
-                  }`}>
-                    {plan.badge}
-                  </div>
-                )}
+              return (
+                <div key={plan.id}
+                  className={`relative rounded-xl border-2 ${isCurrent ? "border-primary-500" : style.border} bg-white p-6 flex flex-col transition-all hover:shadow-elevated`}>
 
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <div className={`w-9 h-9 rounded-lg ${plan.key === "basic" ? "bg-surface-100" : plan.key === "pro" ? "bg-primary-50" : "bg-amber-50"} flex items-center justify-center mb-3`}>
-                      <Icon size={18} className={plan.color} />
+                  {style.badge && (
+                    <div className={`absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold ${
+                      slug === "pro" ? "bg-primary-600 text-white" : "bg-amber-400 text-white"
+                    }`}>
+                      {style.badge}
                     </div>
-                    <p className="font-bold text-surface-900 text-lg">{plan.name}</p>
-                  </div>
-                  {isCurrentPlan && (
-                    <span className="badge badge-purple text-[10px]">Current</span>
                   )}
-                </div>
 
-                <div className="mb-5">
-                  <span className="text-3xl font-bold text-surface-900">${price}</span>
-                  {plan.price > 0 && <span className="text-surface-400 text-sm ml-1">{plan.period}</span>}
-                  {plan.price === 0 && <span className="text-surface-400 text-sm ml-1">forever</span>}
-                  {billing === "yearly" && plan.price > 0 && (
-                    <p className="text-xs text-success-600 font-semibold mt-0.5">Billed ${price * 12}/year</p>
-                  )}
-                </div>
-
-                <div className="flex-1 space-y-2 mb-6">
-                  {plan.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2.5">
-                      <Check size={14} className="text-success-500 flex-shrink-0" />
-                      <span className="text-sm text-surface-600">{f}</span>
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <div className={`w-9 h-9 rounded-lg ${style.icon} flex items-center justify-center mb-3`}>
+                        <Icon size={18} className={style.color} />
+                      </div>
+                      <p className="font-bold text-surface-900 text-lg">{plan.name}</p>
+                      {plan.description && <p className="text-xs text-surface-400 mt-0.5">{plan.description}</p>}
                     </div>
-                  ))}
-                  {plan.missing.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2.5 opacity-35">
-                      <div className="w-3.5 h-0.5 bg-surface-300 flex-shrink-0 ml-px" />
-                      <span className="text-sm text-surface-400 line-through">{f}</span>
-                    </div>
-                  ))}
-                </div>
+                    {isCurrent && <span className="badge badge-purple text-[10px]">Current</span>}
+                  </div>
 
-                <button
-                  onClick={() => setCurrent(plan.key)}
-                  className={`w-full py-2.5 rounded-xl text-sm font-semibold cursor-pointer border-none transition-all ${
-                    isCurrentPlan
-                      ? "bg-surface-100 text-surface-400 cursor-default"
-                      : plan.key === "pro"
-                      ? "bg-primary-600 text-white hover:bg-primary-700"
-                      : plan.key === "premium"
-                      ? "bg-amber-400 text-white hover:bg-amber-500"
-                      : "bg-white text-surface-700 border border-surface-200 hover:bg-surface-50"
-                  }`}
-                  disabled={isCurrentPlan}
-                >
-                  {isCurrentPlan ? "Current Plan" : plan.price === 0 ? "Downgrade" : "Upgrade"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  <div className="mb-5">
+                    <span className="text-3xl font-bold text-surface-900">
+                      {plan.price === 0 ? "Free" : fmtAMD(price)}
+                    </span>
+                    {plan.price > 0 && (
+                      <span className="text-surface-400 text-sm ml-1">/ {billing === "yearly" ? "mo (billed yearly)" : "month"}</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2 mb-6">
+                    {(plan.features || []).map((f, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <Check size={14} className="text-success-500 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-surface-600">
+                          {f.value && f.value !== "true" ? `${f.feature}: ${f.value}` : f.feature}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => !isCurrent && handleChangePlan(slug)}
+                    disabled={isCurrent || isChanging || !!changing}
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold cursor-pointer border-none transition-all disabled:opacity-50 ${
+                      isCurrent ? "bg-surface-100 text-surface-400 cursor-default" : style.btn
+                    }`}>
+                    {isChanging ? "Applying…" :
+                     isCurrent  ? "Current Plan" :
+                     plan.price === 0 ? "Downgrade to Free" :
+                     currentPlanSlug && plans.find(p => p.slug === currentPlanSlug)?.price > plan.price ? "Downgrade" : "Upgrade"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Payment Method */}
         <div className="bg-white rounded-xl border border-surface-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-surface-900 text-sm">Payment Method</h3>
-            <button className="text-xs text-primary-600 font-semibold hover:text-primary-700 cursor-pointer bg-transparent border-none">
-              + Add Card
+            <button onClick={() => setShowCardModal(true)}
+              className="text-xs text-primary-600 font-semibold hover:text-primary-700 cursor-pointer bg-transparent border-none">
+              {paymentMethod ? "Update Card" : "+ Add Card"}
             </button>
           </div>
-          <div className="flex items-center gap-4 p-4 border border-surface-200 rounded-xl bg-surface-50">
-            <div className="w-10 h-7 bg-surface-800 rounded flex items-center justify-center">
-              <span className="text-white text-[9px] font-bold">VISA</span>
+          {paymentMethod ? (
+            <div className="flex items-center gap-4 p-4 border border-surface-200 rounded-xl bg-surface-50">
+              <div className="w-10 h-7 bg-surface-800 rounded flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-[9px] font-bold">{paymentMethod.brand?.toUpperCase() || "CARD"}</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-surface-800">•••• •••• •••• {paymentMethod.last4}</p>
+                <p className="text-xs text-surface-400">{paymentMethod.card_holder} · Expires {paymentMethod.expiry}</p>
+              </div>
+              <span className="badge badge-success text-[10px]">Default</span>
+              <button onClick={() => setShowCardModal(true)}
+                className="text-xs text-primary-600 hover:text-primary-700 cursor-pointer bg-transparent border-none font-medium">
+                Edit
+              </button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-surface-800">•••• •••• •••• 4242</p>
-              <p className="text-xs text-surface-400">Expires 08/26</p>
-            </div>
-            <span className="badge badge-success text-[10px]">Default</span>
-          </div>
+          ) : (
+            <button onClick={() => setShowCardModal(true)}
+              className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-surface-200 rounded-xl hover:border-primary-300 hover:bg-primary-50/30 transition-all cursor-pointer bg-transparent">
+              <CreditCard size={16} className="text-surface-400" />
+              <span className="text-sm text-surface-400 font-medium">Add a payment card</span>
+            </button>
+          )}
         </div>
 
         {/* Billing History */}
@@ -240,35 +368,44 @@ export default function VendorSubscription() {
           <div className="px-5 py-4 border-b border-surface-100">
             <h3 className="font-semibold text-surface-900 text-sm">Billing History</h3>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="bg-surface-50 border-b border-surface-100">
-                {["Date", "Plan", "Amount", "Status", "Invoice"].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {BILLING_HISTORY.map((row, i) => (
-                <tr key={i} className="border-b border-surface-50 last:border-0 table-row">
-                  <td className="px-5 py-3.5 text-sm text-surface-700">{row.date}</td>
-                  <td className="px-5 py-3.5 text-sm font-medium text-surface-800">{row.plan}</td>
-                  <td className="px-5 py-3.5 text-sm font-semibold text-surface-900">{row.amount}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`badge ${row.status === "paid" ? "badge-success" : "badge-gray"}`}>{row.status}</span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <button className="text-xs text-primary-600 font-medium hover:text-primary-700 cursor-pointer bg-transparent border-none">
-                      Download PDF
-                    </button>
-                  </td>
+          {histLoading ? (
+            <div className="px-5 py-8 text-center text-sm text-surface-400">Loading history…</div>
+          ) : history.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-surface-400">No billing records yet.</div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-surface-50 border-b border-surface-100">
+                  {["Date", "Plan", "Amount", "Status"].map(h => (
+                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {history.map(row => (
+                  <tr key={row.id} className="border-b border-surface-50 last:border-0">
+                    <td className="px-5 py-3.5 text-sm text-surface-600">{fmtDate(row.created_at)}</td>
+                    <td className="px-5 py-3.5 text-sm font-medium text-surface-800">{row.plan_name}</td>
+                    <td className="px-5 py-3.5 text-sm font-semibold text-surface-900">{fmtAMD(row.amount)}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`badge ${STATUS_BADGE[row.status] || "badge-gray"}`}>{row.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
       </div>
+
+      {showCardModal && (
+        <PaymentMethodModal
+          initial={paymentMethod}
+          onClose={() => setShowCardModal(false)}
+          onSave={handleSavePaymentMethod}
+        />
+      )}
     </div>
   );
 }
