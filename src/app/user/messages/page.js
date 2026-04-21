@@ -1,145 +1,278 @@
 "use client";
-import { useState } from "react";
-import { Send, Paperclip, Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageSquare, Plus, X, Clock, Send } from "lucide-react";
 import TopBar from "@/components/TopBar";
-import { MESSAGES } from "@/lib/data";
+import { userAPI } from "@/lib/api";
 
-const CHAT_HISTORY = {
-  1: [
-    { from: "Anna Hovhannisyan", text: "Hi! Your cake is ready for pickup tomorrow.", time: "10:02 AM", mine: false },
-    { from: "me", text: "That's great! What time can I pick it up?", time: "10:05 AM", mine: true },
-    { from: "Anna Hovhannisyan", text: "Hi, is the cake available for April 12?", time: "10:12 AM", mine: false },
-  ],
-  2: [
-    { from: "Tigran Avetisyan",  text: "Thank you for the quick delivery!", time: "9:45 AM", mine: false },
-    { from: "me", text: "You're very welcome! Enjoy!", time: "9:48 AM", mine: true },
-  ],
-  3: [
-    { from: "Sona Karapetyan", text: "Can I change my order to Saturday?", time: "8:30 AM", mine: false },
-    { from: "me", text: "I've forwarded the request to the vendor.", time: "8:35 AM", mine: true },
-  ],
-  4: [
-    { from: "Lilit Sargsyan", text: "I need a custom balloon arrangement for 100 guests.", time: "Yesterday", mine: false },
-    { from: "me", text: "I'll check with available vendors and get back to you.", time: "Yesterday", mine: true },
-  ],
-  5: [
-    { from: "Davit Hakobyan", text: "Please confirm my order #ORD-1039", time: "Yesterday", mine: false },
-    { from: "me", text: "Confirmed! You'll receive a notification shortly.", time: "Yesterday", mine: true },
-  ],
+const STATUS_MAP = {
+  new:       { label: "New",       cls: "badge badge-info" },
+  replied:   { label: "Replied",   cls: "badge badge-purple" },
+  confirmed: { label: "Confirmed", cls: "badge badge-success" },
+  cancelled: { label: "Cancelled", cls: "badge badge-danger" },
+  closed:    { label: "Closed",    cls: "badge badge-gray" },
 };
 
+const TABS = ["All", "New", "Replied", "Confirmed", "Cancelled", "Closed"];
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const hours = diff / 3600000;
+  if (hours < 1)  return `${Math.floor(diff / 60000)}m ago`;
+  if (hours < 24) return `${Math.floor(hours)}h ago`;
+  if (hours < 48) return "Yesterday";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function shortId(id) {
+  return id ? id.slice(-6).toUpperCase() : "—";
+}
+
+function NewInquiryModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    vendor_id: "", subject: "", message: "",
+    event_type: "", event_date: "", guest_count: "", budget: "", currency: "USD",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function handleChange(e) {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setError("");
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.vendor_id.trim()) { setError("Vendor ID is required."); return; }
+    if (!form.subject.trim())   { setError("Subject is required."); return; }
+    if (!form.message.trim())   { setError("Message is required."); return; }
+
+    setSaving(true);
+    try {
+      const payload = {
+        vendor_id: form.vendor_id.trim(),
+        subject: form.subject.trim(),
+        message: form.message.trim(),
+      };
+      if (form.event_type)  payload.event_type  = form.event_type;
+      if (form.event_date)  payload.event_date  = form.event_date;
+      if (form.guest_count) payload.guest_count = parseInt(form.guest_count);
+      if (form.budget)      payload.budget       = parseFloat(form.budget);
+      if (form.budget)      payload.currency     = form.currency;
+
+      const res = await userAPI.createInquiry(payload);
+      onCreated(res?.data || res);
+    } catch (err) {
+      setError(err.message || "Failed to send inquiry.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <h2 className="text-sm font-bold text-surface-900">New Inquiry</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-surface-100 flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent">
+            <X size={15} className="text-surface-500" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Vendor ID *</label>
+            <input name="vendor_id" value={form.vendor_id} onChange={handleChange} placeholder="Paste vendor UUID" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Subject *</label>
+            <input name="subject" value={form.subject} onChange={handleChange} placeholder="What is this about?" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Message *</label>
+            <textarea name="message" value={form.message} onChange={handleChange} rows={3} placeholder="Describe what you need…" className="w-full resize-none px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Event Type</label>
+              <input name="event_type" value={form.event_type} onChange={handleChange} placeholder="Wedding, Birthday…" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Event Date</label>
+              <input type="date" name="event_date" value={form.event_date} onChange={handleChange} className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Guest Count</label>
+              <input type="number" name="guest_count" value={form.guest_count} onChange={handleChange} placeholder="e.g. 100" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Budget</label>
+              <div className="flex gap-2">
+                <input type="number" name="budget" value={form.budget} onChange={handleChange} placeholder="500" className="flex-1 px-3 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
+                <select name="currency" value={form.currency} onChange={handleChange} className="px-2 py-2.5 text-sm border border-surface-200 rounded-lg outline-none bg-white focus:border-primary-600">
+                  <option value="USD">USD</option>
+                  <option value="AMD">AMD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-xs text-danger-600 bg-danger-50 border border-danger-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 text-sm font-medium text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer bg-white">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none disabled:opacity-60">
+              <Send size={14} /> {saving ? "Sending…" : "Send Inquiry"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function UserMessages() {
-  const [activeId, setActiveId] = useState(1);
-  const [input, setInput] = useState("");
-  const [chats, setChats] = useState(CHAT_HISTORY);
+  const [inquiries, setInquiries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("All");
+  const [showModal, setShowModal] = useState(false);
 
-  const active = MESSAGES.find(m => m.id === activeId);
-  const messages = chats[activeId] || [];
+  useEffect(() => {
+    userAPI.inquiries({ limit: 50 })
+      .then(res => setInquiries(res?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-    setChats(prev => ({
-      ...prev,
-      [activeId]: [...(prev[activeId] || []), { from: "me", text: input, time: "Just now", mine: true }],
-    }));
-    setInput("");
-  };
+  const filtered = activeTab === "All"
+    ? inquiries
+    : inquiries.filter(i => i.status?.toLowerCase() === activeTab.toLowerCase());
+
+  function handleCreated(newInquiry) {
+    if (newInquiry?.id) setInquiries(prev => [newInquiry, ...prev]);
+    setShowModal(false);
+  }
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar title="Messages" />
+      <TopBar
+        title="Messages"
+        subtitle="Your inquiries to vendors"
+        actions={
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+          >
+            <Plus size={13} /> New Message
+          </button>
+        }
+      />
 
-      <div className="flex flex-1 overflow-hidden m-6 bg-white rounded-xl border border-surface-200">
-        {/* Left: Conversation List */}
-        <div className="w-72 border-r border-surface-100 flex flex-col flex-shrink-0">
-          <div className="p-4 border-b border-surface-100">
-            <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 gap-2">
-              <Search size={13} className="text-surface-400" />
-              <input placeholder="Search messages…" className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400" />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {MESSAGES.map(msg => (
+      <main className="flex-1 p-6 space-y-5">
+        {/* Tabs */}
+        <div className="flex items-center gap-1 bg-white border border-surface-200 rounded-xl px-2 py-1.5 overflow-x-auto w-fit">
+          {TABS.map(tab => {
+            const count = tab === "All" ? inquiries.length : inquiries.filter(i => i.status?.toLowerCase() === tab.toLowerCase()).length;
+            return (
               <button
-                key={msg.id}
-                onClick={() => setActiveId(msg.id)}
-                className={`w-full px-4 py-3.5 flex items-start gap-3 border-b border-surface-50 text-left transition-colors cursor-pointer border-none ${
-                  activeId === msg.id ? "bg-primary-50" : "hover:bg-surface-50 bg-transparent"
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer border-none ${
+                  activeTab === tab ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100 bg-transparent"
                 }`}
               >
-                <div className={`w-9 h-9 rounded-full ${msg.color} flex items-center justify-center flex-shrink-0`}>
-                  <span className="text-white text-sm font-bold">{msg.avatar}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className={`text-sm font-semibold truncate ${activeId === msg.id ? "text-primary-700" : "text-surface-800"}`}>{msg.from}</span>
-                    <span className="text-[10px] text-surface-400 flex-shrink-0 ml-1">{msg.time}</span>
-                  </div>
-                  <p className="text-xs text-surface-400 truncate">{msg.preview}</p>
-                </div>
-                {msg.unread > 0 && (
-                  <span className="w-4 h-4 bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                    {msg.unread}
+                {tab}
+                {count > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-white/20 text-white" : "bg-surface-100 text-surface-500"}`}>
+                    {count}
                   </span>
                 )}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* Right: Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {active && (
-            <div className="px-5 py-3.5 border-b border-surface-100 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full ${active.color} flex items-center justify-center`}>
-                <span className="text-white text-sm font-bold">{active.avatar}</span>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-surface-900">{active.from}</p>
-                <p className="text-xs text-success-600">Online</p>
-              </div>
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading…</div>
+        )}
+
+        {/* Empty */}
+        {!loading && filtered.length === 0 && (
+          <div className="bg-white rounded-xl border border-surface-200 flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-3">
+              <MessageSquare size={24} className="text-blue-300" />
             </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.mine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    msg.mine
-                      ? "bg-primary-600 text-white rounded-br-sm"
-                      : "bg-surface-100 text-surface-800 rounded-bl-sm"
-                  }`}
-                >
-                  {msg.text}
-                  <p className={`text-[10px] mt-1 ${msg.mine ? "text-primary-200" : "text-surface-400"}`}>{msg.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="px-5 py-4 border-t border-surface-100">
-            <div className="flex items-center gap-3 bg-surface-50 rounded-xl border border-surface-200 px-4 py-2.5">
-              <button className="text-surface-400 hover:text-surface-600 cursor-pointer border-none bg-transparent">
-                <Paperclip size={16} />
-              </button>
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && sendMessage()}
-                placeholder="Type a message…"
-                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
-              />
+            <p className="text-sm font-semibold text-surface-600">No messages yet</p>
+            <p className="text-xs text-surface-400 mt-1 mb-4">
+              {activeTab === "All" ? "Send an inquiry to a vendor to start a conversation." : `No ${activeTab.toLowerCase()} inquiries.`}
+            </p>
+            {activeTab === "All" && (
               <button
-                onClick={sendMessage}
-                className="w-8 h-8 bg-primary-600 text-white rounded-lg flex items-center justify-center hover:bg-primary-700 transition-colors cursor-pointer border-none flex-shrink-0"
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
               >
-                <Send size={14} />
+                <Plus size={13} /> Send First Inquiry
               </button>
-            </div>
+            )}
           </div>
-        </div>
-      </div>
+        )}
+
+        {/* Inquiry Cards */}
+        {!loading && filtered.length > 0 && (
+          <div className="space-y-3">
+            {filtered.map(inq => {
+              const statusInfo = STATUS_MAP[inq.status?.toLowerCase()] || { label: inq.status || "—", cls: "badge badge-gray" };
+              return (
+                <div key={inq.id} className="bg-white rounded-xl border border-surface-200 p-4 hover:shadow-card transition-shadow">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
+                        {shortId(inq.vendor_id)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-surface-900">{inq.subject || "(No subject)"}</p>
+                        <p className="text-xs text-surface-400 mt-0.5">Vendor: {inq.vendor_id?.slice(-8) || "—"}</p>
+                        {inq.message && (
+                          <p className="text-xs text-surface-500 mt-1 line-clamp-2">{inq.message}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span className={statusInfo.cls}>{statusInfo.label}</span>
+                      <div className="flex items-center gap-1 text-[11px] text-surface-400">
+                        <Clock size={10} />
+                        {formatDate(inq.created_at)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Event details */}
+                  {(inq.event_type || inq.event_date || inq.budget) && (
+                    <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-surface-50">
+                      {inq.event_type && (
+                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Event:</span> {inq.event_type}</span>
+                      )}
+                      {inq.event_date && (
+                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Date:</span> {inq.event_date?.slice(0, 10)}</span>
+                      )}
+                      {inq.budget && (
+                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Budget:</span> {inq.currency || ""} {inq.budget}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      {showModal && <NewInquiryModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
     </div>
   );
 }

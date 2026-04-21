@@ -78,6 +78,7 @@ export const authAPI = {
   me: () => request("/auth/me"),
   logout: () =>
     request("/auth/logout", { method: "POST" }).catch(() => null),
+  register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
 };
 
 // Admin - Dashboard
@@ -201,6 +202,39 @@ export const vendorsAPI = {
     const q = new URLSearchParams(params).toString();
     return request(`/vendors${q ? "?" + q : ""}`);
   },
+};
+
+// User portal
+export const userAPI = {
+  // Profile
+  getProfile: () => request("/user/profile"),
+  updateProfile: (data) => request("/user/profile", { method: "PUT", body: JSON.stringify(data) }),
+  changePassword: (data) => request("/user/password", { method: "PUT", body: JSON.stringify(data) }),
+  // Orders
+  orders: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/user/orders${q ? "?" + q : ""}`); },
+  createOrder: (data) => request("/user/orders", { method: "POST", body: JSON.stringify(data) }),
+  // Inquiries
+  inquiries: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/user/inquiries${q ? "?" + q : ""}`); },
+  createInquiry: (data) => request("/user/inquiries", { method: "POST", body: JSON.stringify(data) }),
+  // Reviews
+  reviews: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/user/reviews${q ? "?" + q : ""}`); },
+  createReview: (data) => request("/user/reviews", { method: "POST", body: JSON.stringify(data) }),
+  // Saved
+  saved: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/user/saved${q ? "?" + q : ""}`); },
+  saveItem: (target_type, target_id) => request("/user/saved", { method: "POST", body: JSON.stringify({ target_type, target_id }) }),
+  unsaveItem: (id) => request(`/user/saved/${id}`, { method: "DELETE" }),
+  // Notifications
+  notifications: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/user/notifications${q ? "?" + q : ""}`); },
+  markNotifRead: (id) => request(`/user/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotifsRead: () => request("/user/notifications/read-all", { method: "POST" }),
+};
+
+// Public search
+export const publicAPI = {
+  vendors: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/vendors${q ? "?" + q : ""}`); },
+  getVendor: (id) => request(`/vendors/${id}`),
+  products: (params = {}) => { const q = new URLSearchParams(params).toString(); return request(`/products${q ? "?" + q : ""}`); },
+  getProduct: (id) => request(`/products/${id}`),
 };
 
 // Vendor portal

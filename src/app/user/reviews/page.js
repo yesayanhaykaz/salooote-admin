@@ -1,61 +1,20 @@
 "use client";
-import { useState } from "react";
-import {
-  Star, Edit3, CheckCircle, Camera, Send, Package
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Star, Plus, X, Send, CheckCircle } from "lucide-react";
 import TopBar from "@/components/TopBar";
+import { userAPI } from "@/lib/api";
 
-const MY_REVIEWS = [
-  {
-    id: 1,
-    vendor: "Elite Photography Yerevan",
-    service: "Full Day Wedding Photography",
-    date: "March 18, 2025",
-    rating: 5,
-    text: "Absolutely stunning work! The team captured every precious moment of our engagement ceremony with such artistry. The editing was flawless and delivery was faster than expected. Highly recommend to anyone looking for a top-tier photographer in Yerevan.",
-    initials: "EP",
-    bg: "bg-blue-100 text-blue-600",
-  },
-  {
-    id: 2,
-    vendor: "Sweet Dreams Bakery",
-    service: "Custom Engagement Cake",
-    date: "February 10, 2025",
-    rating: 5,
-    text: "The cake was a work of art — not only beautiful but absolutely delicious! Every guest was asking about it. The team was professional, on time, and accommodated our custom design perfectly. Will definitely order again for the wedding!",
-    initials: "SB",
-    bg: "bg-pink-100 text-pink-600",
-  },
-  {
-    id: 3,
-    vendor: "Grand Decor Studio",
-    service: "Engagement Party Decoration",
-    date: "January 25, 2025",
-    rating: 4,
-    text: "Beautiful decoration overall. A few items weren't exactly as shown in the catalog, but the team was responsive and made adjustments quickly. The venue looked magical and we received many compliments from guests.",
-    initials: "GD",
-    bg: "bg-yellow-100 text-yellow-700",
-  },
-];
+const STATUS_BADGE = {
+  pending:  "badge badge-warning",
+  approved: "badge badge-success",
+  rejected: "badge badge-danger",
+  public:   "badge badge-success",
+};
 
-const PENDING_REVIEWS = [
-  {
-    id: 1,
-    vendor: "Nairi Catering Co.",
-    service: "Birthday Party Catering",
-    completedDate: "March 28, 2025",
-    initials: "NC",
-    bg: "bg-orange-100 text-orange-600",
-  },
-  {
-    id: 2,
-    vendor: "Sound Wave DJ",
-    service: "Birthday Party DJ – 4 Hours",
-    completedDate: "March 28, 2025",
-    initials: "SW",
-    bg: "bg-violet-100 text-violet-600",
-  },
-];
+function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 function StarRating({ value, onChange, readonly }) {
   const [hovered, setHovered] = useState(0);
@@ -81,237 +40,219 @@ function StarRating({ value, onChange, readonly }) {
   );
 }
 
-function ReviewComposer({ vendor, onSubmit, onCancel }) {
-  const [rating, setRating] = useState(0);
-  const [text, setText] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+function WriteReviewModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({
+    target_type: "vendor",
+    target_id: "",
+    rating: 0,
+    title: "",
+    body: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleSubmit() {
-    if (!rating || !text.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => onSubmit && onSubmit(), 2000);
+  function handleChange(e) {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setError("");
   }
 
-  if (submitted) {
-    return (
-      <div className="border border-green-200 rounded-xl bg-green-50 px-5 py-6 text-center">
-        <CheckCircle size={28} className="text-green-500 mx-auto mb-2" />
-        <p className="text-sm font-semibold text-green-700">Review submitted successfully!</p>
-        <p className="text-xs text-green-600 mt-1">Thank you for sharing your feedback.</p>
-      </div>
-    );
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.target_id.trim()) { setError("Target ID is required."); return; }
+    if (!form.rating)           { setError("Please select a rating."); return; }
+    if (!form.body.trim())      { setError("Review body is required."); return; }
+
+    setSaving(true);
+    try {
+      const res = await userAPI.createReview({
+        target_type: form.target_type,
+        target_id: form.target_id.trim(),
+        rating: form.rating,
+        title: form.title.trim(),
+        body: form.body.trim(),
+      });
+      onCreated(res?.data || res);
+    } catch (err) {
+      setError(err.message || "Failed to submit review.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="border border-surface-200 rounded-xl bg-surface-50 p-4 mt-3 space-y-3">
-      <div>
-        <p className="text-xs text-surface-500 font-medium mb-1.5">Your Rating</p>
-        <StarRating value={rating} onChange={setRating} />
-        {rating === 0 && <p className="text-[11px] text-surface-400 mt-1">Click to set a rating</p>}
-      </div>
-      <div>
-        <p className="text-xs text-surface-500 font-medium mb-1.5">Your Review</p>
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder={`Share your experience with ${vendor}…`}
-          rows={4}
-          className="w-full resize-none border border-surface-200 bg-white rounded-xl px-3 py-2.5 text-sm text-surface-700 placeholder:text-surface-400 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-50 transition-colors"
-        />
-      </div>
-      <div>
-        <button className="flex items-center gap-1.5 text-xs text-surface-500 border border-surface-200 bg-white px-3 py-2 rounded-lg hover:bg-surface-50 transition-colors">
-          <Camera size={13} /> Add Photo (optional)
-        </button>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleSubmit}
-          disabled={!rating || !text.trim()}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Send size={13} /> Submit Review
-        </button>
-        <button onClick={onCancel} className="text-xs text-surface-500 px-3 py-2 rounded-lg hover:bg-surface-100 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between sticky top-0 bg-white z-10">
+          <h2 className="text-sm font-bold text-surface-900">Write a Review</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-surface-100 flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent">
+            <X size={15} className="text-surface-500" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Type *</label>
+              <select
+                name="target_type"
+                value={form.target_type}
+                onChange={handleChange}
+                className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 bg-white"
+              >
+                <option value="vendor">Vendor</option>
+                <option value="product">Product</option>
+                <option value="service">Service</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Target ID *</label>
+              <input
+                name="target_id"
+                value={form.target_id}
+                onChange={handleChange}
+                placeholder="UUID"
+                className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors font-mono"
+              />
+            </div>
+          </div>
 
-function EditForm({ review, onSave, onCancel }) {
-  const [rating, setRating] = useState(review.rating);
-  const [text, setText] = useState(review.text);
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-2">Rating *</label>
+            <StarRating value={form.rating} onChange={v => setForm(prev => ({ ...prev, rating: v }))} />
+            {!form.rating && <p className="text-[11px] text-surface-400 mt-1">Click to set a rating</p>}
+          </div>
 
-  return (
-    <div className="border border-primary-200 rounded-xl bg-primary-50 p-4 mt-3 space-y-3">
-      <div>
-        <p className="text-xs text-surface-500 font-medium mb-1.5">Rating</p>
-        <StarRating value={rating} onChange={setRating} />
-      </div>
-      <div>
-        <p className="text-xs text-surface-500 font-medium mb-1.5">Review</p>
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          rows={4}
-          className="w-full resize-none border border-surface-200 bg-white rounded-xl px-3 py-2.5 text-sm text-surface-700 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-50 transition-colors"
-        />
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => onSave({ rating, text })}
-          className="text-xs font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
-        >
-          Save Changes
-        </button>
-        <button onClick={onCancel} className="text-xs text-surface-500 px-3 py-2 rounded-lg hover:bg-surface-100 transition-colors">
-          Cancel
-        </button>
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Title</label>
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Summary of your experience"
+              className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Review *</label>
+            <textarea
+              name="body"
+              value={form.body}
+              onChange={handleChange}
+              rows={4}
+              placeholder="Share your experience…"
+              className="w-full resize-none px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors"
+            />
+          </div>
+
+          {error && (
+            <p className="text-xs text-danger-600 bg-danger-50 border border-danger-200 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 text-sm font-medium text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer bg-white">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none disabled:opacity-60">
+              <Send size={14} /> {saving ? "Submitting…" : "Submit Review"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
 export default function ReviewsPage() {
-  const [activeTab, setActiveTab] = useState("My Reviews");
-  const [editingId, setEditingId] = useState(null);
-  const [composingId, setComposingId] = useState(null);
-  const [reviews, setReviews] = useState(MY_REVIEWS);
-  const [submitted, setSubmitted] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
 
-  function handleSaveEdit(id, updates) {
-    setReviews(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-    setEditingId(null);
-  }
+  useEffect(() => {
+    userAPI.reviews({ limit: 50 })
+      .then(res => setReviews(res?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-  function handleSubmitReview(id) {
-    setSubmitted(prev => [...prev, id]);
-    setComposingId(null);
+  function handleCreated(newReview) {
+    if (newReview?.id) setReviews(prev => [newReview, ...prev]);
+    setShowModal(false);
   }
 
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar title="Reviews" subtitle="Manage your vendor reviews" />
+      <TopBar
+        title="Reviews"
+        subtitle="Your submitted reviews"
+        actions={
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+          >
+            <Plus size={13} /> Write Review
+          </button>
+        }
+      />
 
-      <main className="flex-1 p-6 space-y-6">
+      <main className="flex-1 p-6 space-y-5">
+        {loading && (
+          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading…</div>
+        )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-white border border-surface-200 rounded-xl px-2 py-1.5 w-fit">
-          {["My Reviews", "Pending Reviews"].map(tab => (
+        {!loading && reviews.length === 0 && (
+          <div className="bg-white rounded-xl border border-surface-200 flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-14 h-14 bg-yellow-50 rounded-2xl flex items-center justify-center mb-3">
+              <Star size={24} className="text-yellow-300" />
+            </div>
+            <p className="text-sm font-semibold text-surface-600">No reviews yet</p>
+            <p className="text-xs text-surface-400 mt-1 mb-4">Share your experience with vendors you have worked with.</p>
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                activeTab === tab ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100"
-              }`}
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
             >
-              {tab}
-              {tab === "Pending Reviews" && (
-                <span className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab ? "bg-white/20 text-white" : "bg-danger-100 text-danger-600"}`}>
-                  {PENDING_REVIEWS.filter(p => !submitted.includes(p.id)).length}
-                </span>
-              )}
+              <Plus size={13} /> Write Your First Review
             </button>
-          ))}
-        </div>
-
-        {activeTab === "My Reviews" && (
-          <div className="space-y-4">
-            {reviews.map(review => (
-              <div key={review.id} className="bg-white rounded-xl border border-surface-200 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${review.bg}`}>
-                      {review.initials}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-surface-900">{review.vendor}</p>
-                      <p className="text-xs text-surface-400">{review.service}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-xs text-surface-400">{review.date}</span>
-                    {editingId !== review.id && (
-                      <button
-                        onClick={() => setEditingId(review.id)}
-                        className="flex items-center gap-1 text-xs text-primary-600 font-medium border border-primary-200 px-2.5 py-1 rounded-lg hover:bg-primary-50 transition-colors"
-                      >
-                        <Edit3 size={12} /> Edit
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {editingId === review.id ? (
-                  <EditForm
-                    review={review}
-                    onSave={(updates) => handleSaveEdit(review.id, updates)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <div className="mt-3">
-                    <StarRating value={review.rating} readonly />
-                    <p className="text-sm text-surface-600 mt-2 leading-relaxed">{review.text}</p>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         )}
 
-        {activeTab === "Pending Reviews" && (
+        {!loading && reviews.length > 0 && (
           <div className="space-y-4">
-            {PENDING_REVIEWS.filter(p => !submitted.includes(p.id)).length === 0 ? (
-              <div className="bg-white rounded-xl border border-surface-200 flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mb-3">
-                  <CheckCircle size={24} className="text-green-400" />
-                </div>
-                <p className="text-sm font-semibold text-surface-600">All reviews submitted!</p>
-                <p className="text-xs text-surface-400 mt-1">You are all caught up. Thank you for your feedback.</p>
-              </div>
-            ) : (
-              PENDING_REVIEWS.filter(p => !submitted.includes(p.id)).map(item => (
-                <div key={item.id} className="bg-white rounded-xl border border-surface-200 p-5">
-                  <div className="flex items-center justify-between gap-3">
+            {reviews.map(review => {
+              const badgeCls = STATUS_BADGE[review.status?.toLowerCase()] || "badge badge-gray";
+              return (
+                <div key={review.id} className="bg-white rounded-xl border border-surface-200 p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${item.bg}`}>
-                        {item.initials}
+                      <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
+                        {review.target_type?.slice(0, 2).toUpperCase() || "??"}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-surface-900">{item.vendor}</p>
-                        <p className="text-xs text-surface-400">{item.service}</p>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <CheckCircle size={11} className="text-green-500" />
-                          <span className="text-[11px] text-green-600 font-medium">Completed {item.completedDate}</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-surface-900 capitalize">{review.target_type}</p>
+                          <span className="font-mono text-xs text-surface-400">{review.target_id?.slice(-8)}</span>
+                          <span className={badgeCls}>{review.status || "pending"}</span>
                         </div>
+                        {review.title && (
+                          <p className="text-xs font-medium text-surface-700 mt-0.5">{review.title}</p>
+                        )}
                       </div>
                     </div>
-                    {composingId !== item.id && (
-                      <button
-                        onClick={() => setComposingId(item.id)}
-                        className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors flex-shrink-0"
-                      >
-                        <Star size={13} /> Write Review
-                      </button>
-                    )}
+                    <span className="text-xs text-surface-400 flex-shrink-0">{formatDate(review.created_at)}</span>
                   </div>
 
-                  {composingId === item.id && (
-                    <ReviewComposer
-                      vendor={item.vendor}
-                      onSubmit={() => handleSubmitReview(item.id)}
-                      onCancel={() => setComposingId(null)}
-                    />
+                  <StarRating value={review.rating} readonly />
+
+                  {review.body && (
+                    <p className="text-sm text-surface-600 mt-2 leading-relaxed">{review.body}</p>
                   )}
                 </div>
-              ))
-            )}
+              );
+            })}
           </div>
         )}
-
       </main>
+
+      {showModal && <WriteReviewModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
     </div>
   );
 }
