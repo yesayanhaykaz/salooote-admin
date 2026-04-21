@@ -35,7 +35,9 @@ async function request(path, options = {}) {
     } else {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
-      window.location.href = "/login";
+      // Redirect to the right login page based on which portal the user is in
+      const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+      window.location.href = currentPath.startsWith("/user") ? "/user/login" : "/login";
       return;
     }
   }

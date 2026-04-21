@@ -171,8 +171,15 @@ export default function LoginPage() {
             <p className="font-semibold text-surface-700 mb-1">{t("demo.title")}</p>
             <p>{t("demo.admin")}: admin@salooote.am / Admin@123</p>
             <p>{t("demo.vendor")}: vendor@salooote.am / Vendor@123</p>
-            <p>{t("demo.user")}: user@example.com / User@123</p>
           </div>
+
+          {/* Client portal link */}
+          <p className="text-center text-xs text-surface-400 mt-4">
+            Regular user?{" "}
+            <a href="/user/login" className="text-primary-600 font-semibold hover:text-primary-700">
+              Go to client login →
+            </a>
+          </p>
         </div>
       </div>
     </div>
