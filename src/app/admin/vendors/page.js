@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import {
   UserPlus, Eye, Star, X, MessageSquare, Pencil,
-  ShieldOff, MapPin, Package, DollarSign, Calendar, BadgeCheck, Tag,
+  ShieldOff, MapPin, Package, DollarSign, Calendar, BadgeCheck, Tag, Link2,
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import CategoryPicker from "@/components/CategoryPicker";
-import { adminVendorsAPI } from "@/lib/api";
+import { adminVendorsAPI, aiAPI } from "@/lib/api";
 
 const STATUS_TABS = ["All", "Active", "Pending", "Suspended"];
 
@@ -50,8 +50,132 @@ function StarRating({ rating }) {
   );
 }
 
+/* ── Toast ── */
+function Toast({ message, type = "success", onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3500);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  const colors = type === "error"
+    ? "bg-red-50 border-red-200 text-red-700"
+    : "bg-green-50 border-green-200 text-green-700";
+  return (
+    <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-2 px-4 py-3 rounded-xl border shadow-lg text-sm font-medium animate-fade-in ${colors}`}>
+      {type === "error" ? "⚠️" : "✅"} {message}
+    </div>
+  );
+}
+
+/* ── Import from Website Modal ── */
+function ImportFromWebsiteModal({ onClose, onImported }) {
+  const [url, setUrl] = useState("https://");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleImport = async () => {
+    const trimmed = url.trim();
+    if (!trimmed || trimmed === "https://") {
+      setError("Please enter a valid URL.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const prompt = `You are a data extraction assistant. Visit or analyze this business website URL: ${trimmed}\n\nExtract the following information and return ONLY a valid JSON object with these exact keys (use empty string if not found):\n{\n  "business_name": "",\n  "description": "",\n  "phone": "",\n  "email": "",\n  "city": "",\n  "address": "",\n  "website": "${trimmed}",\n  "facebook_url": "",\n  "instagram_url": ""\n}\n\nReturn ONLY the JSON, no markdown, no explanation.`;
+
+      const res = await aiAPI.adminChat([{ role: "user", content: prompt }]);
+      const raw = res?.data?.content || res?.data?.message || "";
+
+      // Extract JSON from response (strip markdown fences if present)
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON found in response");
+
+      const extracted = JSON.parse(jsonMatch[0]);
+      onImported(extracted);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setError("Could not extract info, please fill manually.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={!loading ? onClose : undefined} />
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-primary-50 flex items-center justify-center">
+              <Link2 size={14} className="text-primary-600" />
+            </div>
+            <h2 className="text-sm font-bold text-surface-900">Import Vendor from Website</h2>
+          </div>
+          {!loading && (
+            <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-surface-400 hover:bg-surface-100 border-0 bg-transparent cursor-pointer">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Website URL</label>
+            <input
+              type="url"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !loading && handleImport()}
+              disabled={loading}
+              placeholder="https://example.com"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-surface-200 text-sm text-surface-800 placeholder:text-surface-400 focus:border-primary-500 outline-none transition-colors disabled:opacity-50"
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2">{error}</p>
+          )}
+          <p className="text-xs text-surface-400">
+            The AI will attempt to extract business info from the URL. Results may be partial — review before saving.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-5 py-4 border-t border-surface-100 bg-surface-50/50">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="px-4 py-2 rounded-xl text-sm font-medium text-surface-600 border border-surface-200 bg-white hover:bg-surface-50 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 text-sm font-semibold text-white hover:bg-primary-700 transition-colors cursor-pointer border-0 disabled:opacity-60"
+          >
+            {loading ? (
+              <>
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Scraping…
+              </>
+            ) : (
+              <>Import & Fill →</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Vendor Create/Edit Modal ── */
-function VendorModal({ onClose, onSave, initial }) {
+function VendorModal({ onClose, onSave, initial, prefill }) {
   const isEdit = !!initial;
   const [activeSection, setActiveSection] = useState("info");
   const [form, setForm] = useState(initial ? {
@@ -65,8 +189,15 @@ function VendorModal({ onClose, onSave, initial }) {
     status:        initial.status || "active",
   } : {
     first_name: "", last_name: "", email: "", password: "",
-    business_name: "", business_type: "", description: "",
-    phone: "", city: "", website: "", status: "active",
+    business_name: prefill?.business_name || "",
+    business_type: "",
+    description:   prefill?.description || "",
+    phone:         prefill?.phone || "",
+    email:         prefill?.email || "",
+    city:          prefill?.city || "",
+    website:       prefill?.website || "",
+    address:       prefill?.address || "",
+    status: "active",
   });
   const [categoryIds, setCategoryIds] = useState([]);
   const [catLoading, setCatLoading]   = useState(isEdit);
@@ -360,6 +491,9 @@ export default function VendorsPage() {
   const [editVendor, setEditVendor] = useState(null);
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPrefill, setImportPrefill] = useState(null);
+  const [toast, setToast] = useState(null); // { message, type }
 
   const fetchVendors = async () => {
     setLoading(true);
@@ -403,18 +537,33 @@ export default function VendorsPage() {
 
   const countByStatus = (s) => vendors.filter(v => v.status === s).length;
 
+  const handleImported = (data) => {
+    setImportPrefill(data);
+    setEditVendor(null);
+    setShowModal(true);
+    setToast({ message: "Vendor info imported! Review and save.", type: "success" });
+  };
+
   return (
     <div className="flex flex-col flex-1">
       <TopBar
         title="Vendors"
         subtitle="Manage vendor accounts"
         actions={
-          <button
-            onClick={() => { setEditVendor(null); setShowModal(true); }}
-            className="flex items-center gap-2 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors border-0 cursor-pointer"
-          >
-            <UserPlus size={14} /> Add Vendor
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-surface-50 text-surface-700 text-sm font-semibold rounded-lg transition-colors border border-surface-200 cursor-pointer"
+            >
+              <Link2 size={14} /> Import from Website
+            </button>
+            <button
+              onClick={() => { setEditVendor(null); setImportPrefill(null); setShowModal(true); }}
+              className="flex items-center gap-2 px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition-colors border-0 cursor-pointer"
+            >
+              <UserPlus size={14} /> Add Vendor
+            </button>
+          </div>
         }
       />
 
@@ -497,7 +646,7 @@ export default function VendorsPage() {
                       <Eye size={12} /> View
                     </button>
                     <button
-                      onClick={() => { setEditVendor(v); setShowModal(true); }}
+                      onClick={() => { setEditVendor(v); setImportPrefill(null); setShowModal(true); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-surface-50 hover:bg-surface-100 text-surface-600 text-xs font-semibold transition-colors border border-surface-200 cursor-pointer bg-white"
                     >
                       <Pencil size={12} /> Edit
@@ -521,7 +670,7 @@ export default function VendorsPage() {
             vendor={selectedVendor}
             onClose={() => setSelectedVendor(null)}
             onStatusChange={handleStatusChange}
-            onEdit={(v) => { setEditVendor(v); setShowModal(true); }}
+            onEdit={(v) => { setEditVendor(v); setImportPrefill(null); setShowModal(true); }}
           />
         </>
       )}
@@ -529,9 +678,27 @@ export default function VendorsPage() {
       {/* Create/Edit modal */}
       {showModal && (
         <VendorModal
-          onClose={() => { setShowModal(false); setEditVendor(null); }}
+          onClose={() => { setShowModal(false); setEditVendor(null); setImportPrefill(null); }}
           onSave={editVendor ? handleEdit : handleCreate}
           initial={editVendor}
+          prefill={importPrefill}
+        />
+      )}
+
+      {/* Import from Website modal */}
+      {showImportModal && (
+        <ImportFromWebsiteModal
+          onClose={() => setShowImportModal(false)}
+          onImported={handleImported}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDone={() => setToast(null)}
         />
       )}
     </div>
