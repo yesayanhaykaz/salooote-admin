@@ -22,7 +22,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminProductsAPI.list({ limit: 100 })
+    adminProductsAPI.list({ limit: 500 })
       .then(res => {
         setProducts(res.data || []);
         setLoading(false);

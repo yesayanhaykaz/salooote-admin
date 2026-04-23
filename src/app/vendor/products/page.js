@@ -424,7 +424,7 @@ export default function VendorProducts() {
   const [filterStatus, setFilterStatus] = useState("");
 
   const fetchProducts = useCallback(() => {
-    return vendorAPI.products({ limit: 100, locale })
+    return vendorAPI.products({ limit: 500, locale })
       .then(res => { setProducts(res?.data || []); setLoading(false); return res?.data || []; })
       .catch(() => { setLoading(false); return []; });
   }, [locale]);
