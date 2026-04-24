@@ -494,7 +494,7 @@ export default function VendorProducts() {
   useEffect(() => {
     const editId = searchParams?.get("edit");
     fetchProducts().then(list => { if (editId) openEdit(editId); });
-    adminCategoriesAPI.list().then(res => {
+    vendorAPI.allCategories().then(res => {
       const flat = res?.data || [];
       // Build tree: group children under their parents
       const map = {};

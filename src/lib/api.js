@@ -338,6 +338,8 @@ export const vendorAPI = {
   getCategories: () => request("/vendor/categories"),
   setCategories: (category_ids) =>
     request("/vendor/categories", { method: "PUT", body: JSON.stringify({ category_ids }) }),
+  // All categories including hidden — for product category picker
+  allCategories: () => request("/vendor/categories/all"),
 
   // Subscription
   subscription: () => request("/vendor/subscription"),
