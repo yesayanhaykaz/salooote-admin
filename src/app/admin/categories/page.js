@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, X, ImageIcon, Package, Globe } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ImageIcon, Package, Globe, Eye, EyeOff } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import DataTable from "@/components/DataTable";
 import { adminCategoriesAPI, uploadAPI } from "@/lib/api";
@@ -358,6 +358,14 @@ export default function CategoriesPage() {
     } catch (e) { console.error(e); }
   };
 
+  const handleToggleVisible = async (cat) => {
+    const newVal = !cat.is_visible;
+    try {
+      await adminCategoriesAPI.setVisible(cat.id, newVal);
+      setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_visible: newVal } : c));
+    } catch (e) { console.error(e); }
+  };
+
   const tableColumns = [
     {
       key: "name",
@@ -408,6 +416,23 @@ export default function CategoriesPage() {
       render: (val) => <StatusBadge status={val} />,
     },
     {
+      key: "is_visible",
+      label: "Visible",
+      render: (val, row) => (
+        <button
+          onClick={() => handleToggleVisible(row)}
+          title={val === false ? "Show on website" : "Hide from website"}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+            val === false
+              ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
+              : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+          }`}
+        >
+          {val === false ? <><EyeOff size={11} /> Hidden</> : <><Eye size={11} /> Visible</>}
+        </button>
+      ),
+    },
+    {
       key: "id",
       label: "Actions",
       render: (id, row) => (
@@ -446,7 +471,7 @@ export default function CategoriesPage() {
               {/* Grid cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
                 {categories.map(cat => (
-                  <div key={cat.id} className="bg-white rounded-xl border-2 border-surface-100 overflow-hidden hover:shadow-card transition-shadow group">
+                  <div key={cat.id} className="bg-white rounded-xl border-2 border-surface-100 overflow-hidden hover:shadow-card transition-shadow group relative">
                     {/* Image or emoji header */}
                     {cat.image_url ? (
                       <div className="relative w-full h-24 overflow-hidden">
@@ -466,7 +491,18 @@ export default function CategoriesPage() {
                       <p className="text-sm font-bold text-surface-800 truncate">{cat.name}</p>
                       <p className="text-xs text-surface-400 mt-0.5">{cat.product_count || 0} products</p>
                     </div>
+                    {/* Visibility indicator */}
+                    {cat.is_visible === false && (
+                      <div className="absolute top-2 left-2">
+                        <span className="bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md flex items-center gap-1"><EyeOff size={9} /> Hidden</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-center gap-1.5 pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleToggleVisible(cat)}
+                        title={cat.is_visible === false ? "Show on website" : "Hide from website"}
+                        className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer bg-white ${cat.is_visible === false ? "border-amber-300 text-amber-500 hover:bg-amber-50" : "border-surface-200 text-surface-400 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200"}`}>
+                        {cat.is_visible === false ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </button>
                       <button onClick={() => setEditCat(cat)}
                         className="w-7 h-7 rounded-lg border border-surface-200 flex items-center justify-center text-surface-400 hover:text-violet-600 hover:bg-violet-50 hover:border-violet-200 transition-colors cursor-pointer bg-white">
                         <Pencil size={12} />

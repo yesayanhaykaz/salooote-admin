@@ -108,7 +108,9 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
     name:              initial?.name              || "",
     description:       initial?.description       || "",
     short_description: initial?.short_description || "",
-    category_id:       initial?.category_id       || "",
+    // multi-category: prefer category_ids array, fall back to category_id
+    category_ids:      initial?.category_ids?.map(id => String(id)) ||
+                       (initial?.category_id ? [String(initial.category_id)] : []),
     price:             initial?.price             ?? "",
     compare_price:     initial?.compare_price     ?? "",
     currency:          initial?.currency          || "AMD",
@@ -138,7 +140,11 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
     stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
     status:            status || form.status,
     tags:              form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-    ...(form.category_id  ? { category_id:    form.category_id }              : {}),
+    // send both for backward compat
+    ...(form.category_ids.length > 0 ? {
+      category_id:  form.category_ids[0],
+      category_ids: form.category_ids,
+    } : {}),
     ...(form.compare_price !== "" ? { compare_price: parseFloat(form.compare_price) } : {}),
   });
 
@@ -279,15 +285,58 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
 
           <Section title={t("products.section_cat_tags")} icon={Tag} defaultOpen>
             <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.category")}</label>
-              <select
-                value={form.category_id}
-                onChange={e => set("category_id", e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white outline-none cursor-pointer focus:border-primary-400"
-              >
-                <option value="">{t("common.select_category")}</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
-              </select>
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                {t("common.category")}
+                <span className="ml-1.5 text-surface-400 font-normal text-[11px]">(select multiple)</span>
+              </label>
+              {/* Multi-category checkbox panel */}
+              <div className="border border-surface-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                {categories.length === 0 && (
+                  <p className="px-4 py-3 text-sm text-surface-400">{t("common.loading")}</p>
+                )}
+                {categories.map(cat => {
+                  // Show parent + its children
+                  const items = [cat, ...(cat.children || [])];
+                  return items.map((c, ci) => {
+                    const isChild = c.parent_id != null;
+                    const checked = form.category_ids.includes(String(c.id));
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-surface-50 transition-colors ${
+                          ci < items.length - 1 ? "border-b border-surface-100" : ""
+                        } ${isChild ? "pl-8 bg-surface-50/50" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={e => {
+                            const id = String(c.id);
+                            if (e.target.checked) {
+                              set("category_ids", [...form.category_ids, id]);
+                            } else {
+                              set("category_ids", form.category_ids.filter(x => x !== id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded accent-violet-600 cursor-pointer"
+                        />
+                        {c.color && (
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                        )}
+                        <span className={`text-sm ${isChild ? "text-surface-600" : "font-medium text-surface-800"}`}>
+                          {c.emoji ? `${c.emoji} ` : ""}{c.name}
+                        </span>
+                        {checked && <span className="ml-auto text-[10px] text-violet-500 font-semibold">✓</span>}
+                      </label>
+                    );
+                  });
+                })}
+              </div>
+              {form.category_ids.length > 0 && (
+                <p className="text-[11px] text-violet-600 mt-1.5 font-medium">
+                  {form.category_ids.length} {form.category_ids.length === 1 ? "category" : "categories"} selected
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.tags")}</label>
@@ -389,6 +438,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
                 {form.name && <div className="flex justify-between"><span className="text-surface-400">{t("common.name_label")}</span><span className="font-medium text-right max-w-[160px] truncate">{form.name}</span></div>}
                 {form.price && <div className="flex justify-between"><span className="text-surface-400">{t("common.price_label")}</span><span className="font-medium">{form.currency} {parseFloat(form.price).toLocaleString()}</span></div>}
                 {form.sku && <div className="flex justify-between"><span className="text-surface-400">{t("products.sku")}</span><span className="font-medium">{form.sku}</span></div>}
+                {form.category_ids.length > 0 && <div className="flex justify-between"><span className="text-surface-400">{t("common.category")}</span><span className="font-medium text-violet-600">{form.category_ids.length} selected</span></div>}
                 <div className="flex justify-between"><span className="text-surface-400">{t("common.images")}</span><span className="font-medium">{images.length}</span></div>
                 <div className="flex justify-between">
                   <span className="text-surface-400">{t("common.languages")}</span>
@@ -444,7 +494,21 @@ export default function VendorProducts() {
   useEffect(() => {
     const editId = searchParams?.get("edit");
     fetchProducts().then(list => { if (editId) openEdit(editId); });
-    adminCategoriesAPI.list().then(res => setCategories(res?.data || [])).catch(() => {});
+    adminCategoriesAPI.list().then(res => {
+      const flat = res?.data || [];
+      // Build tree: group children under their parents
+      const map = {};
+      flat.forEach(c => { map[c.id] = { ...c, children: [] }; });
+      const roots = [];
+      flat.forEach(c => {
+        if (c.parent_id && map[c.parent_id]) {
+          map[c.parent_id].children.push(map[c.id]);
+        } else {
+          roots.push(map[c.id]);
+        }
+      });
+      setCategories(roots);
+    }).catch(() => {});
   }, [locale]);
 
   const handleCreate   = async (data) => { const res = await vendorAPI.createProduct(data); fetchProducts(); return res; };
@@ -461,7 +525,11 @@ export default function VendorProducts() {
   if (mode === "edit" && editProduct) return <ProductEditor initial={editProduct} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
 
   const filtered = products.filter(p => {
-    if (filterCat && p.category_id !== filterCat) return false;
+    if (filterCat) {
+      // Check both category_ids array and legacy category_id
+      const inCats = (p.category_ids || []).map(String).includes(filterCat) || String(p.category_id) === filterCat;
+      if (!inCats) return false;
+    }
     if (filterStatus && p.status !== filterStatus) return false;
     return true;
   });
@@ -527,7 +595,12 @@ export default function VendorProducts() {
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
           <option value="">{t("products.all_categories")}</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>)}
+          {categories.flatMap(c => [
+            <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>,
+            ...(c.children || []).map(ch => (
+              <option key={ch.id} value={ch.id}>　{ch.emoji} {ch.name}</option>
+            ))
+          ])}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">

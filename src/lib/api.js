@@ -179,7 +179,8 @@ export const adminProductsAPI = {
 
 // Admin - Categories
 export const adminCategoriesAPI = {
-  list: () => request("/categories"),
+  // Use admin endpoint so hidden categories are also returned
+  list: () => request("/admin/categories"),
   create: (data) =>
     request("/admin/categories", {
       method: "POST",
@@ -189,6 +190,11 @@ export const adminCategoriesAPI = {
     request(`/admin/categories/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+  setVisible: (id, is_visible) =>
+    request(`/admin/categories/${id}/visible`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_visible }),
     }),
   delete: (id) => request(`/admin/categories/${id}`, { method: "DELETE" }),
   upsertTranslation: (id, data) =>
@@ -254,6 +260,8 @@ export const vendorAPI = {
     request(`/vendor/products/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   upsertProductTranslation: (id, locale, data) =>
     request(`/vendor/products/${id}/translations`, { method: "POST", body: JSON.stringify({ locale, ...data }) }),
+  setProductCategories: (id, category_ids) =>
+    request(`/vendor/products/${id}/categories`, { method: "PUT", body: JSON.stringify({ category_ids }) }),
   publishProduct: (id) =>
     request(`/vendor/products/${id}/publish`, { method: "POST" }),
   unpublishProduct: (id) =>
