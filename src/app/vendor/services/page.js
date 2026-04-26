@@ -140,6 +140,14 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
   const [activeLang, setActiveLang] = useState("en");
+  // Lead time (hours) → friendly value+unit
+  const initialLeadHours = initial?.lead_time_hours ?? initial?.min_lead_time_hours ?? null;
+  const [leadValue, leadUnit] = (() => {
+    if (initialLeadHours == null || initialLeadHours === 0) return ["", "hours"];
+    if (initialLeadHours % 24 === 0) return [String(initialLeadHours / 24), "days"];
+    return [String(initialLeadHours), "hours"];
+  })();
+
   const [form, setForm] = useState({
     name:              initial?.name              || "",
     description:       initial?.description       || "",
@@ -153,6 +161,8 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
     service_area:      initial?.service_area      || [],
     status:            initial?.status            || "draft",
     is_featured:       initial?.is_featured       || false,
+    lead_time:         leadValue,
+    lead_time_unit:    leadUnit,
   });
   const [transForm, setTransForm] = useState({
     hy: getInitialTrans(initial?.translations, "hy"),
@@ -165,20 +175,26 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
     setTransForm(f => ({ ...f, [locale]: { ...f[locale], [k]: v } }));
   };
 
-  const buildPayload = (status) => ({
-    name:              form.name.trim(),
-    description:       form.description,
-    short_description: form.short_description,
-    pricing_type:      form.pricing_type,
-    base_price:        form.base_price !== "" ? parseFloat(form.base_price) : null,
-    currency:          form.currency || "AMD",
-    duration_hours:    form.duration_hours !== "" ? parseFloat(form.duration_hours) : null,
-    tags:              form.tags,
-    service_area:      form.service_area,
-    status:            status || form.status,
-    is_featured:       form.is_featured,
-    ...(form.category_id ? { category_id: form.category_id } : {}),
-  });
+  const buildPayload = (status) => {
+    const leadHours = form.lead_time !== "" && form.lead_time != null
+      ? Math.max(0, Math.round(parseFloat(form.lead_time) * (form.lead_time_unit === "days" ? 24 : 1)))
+      : null;
+    return {
+      name:              form.name.trim(),
+      description:       form.description,
+      short_description: form.short_description,
+      pricing_type:      form.pricing_type,
+      base_price:        form.base_price !== "" ? parseFloat(form.base_price) : null,
+      currency:          form.currency || "AMD",
+      duration_hours:    form.duration_hours !== "" ? parseFloat(form.duration_hours) : null,
+      tags:              form.tags,
+      service_area:      form.service_area,
+      status:            status || form.status,
+      is_featured:       form.is_featured,
+      ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
+      ...(form.category_id ? { category_id: form.category_id } : {}),
+    };
+  };
 
   const handleSave = async (statusOverride) => {
     if (!form.name.trim()) return;
@@ -367,6 +383,52 @@ function ServiceEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
                   {["AMD", "USD", "EUR", "RUB"].map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
+            </div>
+
+            {/* Min lead time / earliest delivery */}
+            <div className="border-t border-surface-100 pt-4">
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                Min lead time
+                <span className="ml-1.5 text-surface-400 font-normal text-[11px]">
+                  (earliest the service can be delivered)
+                </span>
+              </label>
+              <div className="flex items-stretch gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step={form.lead_time_unit === "hours" ? "1" : "0.5"}
+                  value={form.lead_time}
+                  onChange={e => set("lead_time", e.target.value)}
+                  placeholder={form.lead_time_unit === "hours" ? "e.g. 4" : "e.g. 2"}
+                  className="flex-1 px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+                />
+                <div className="flex bg-surface-100 rounded-xl p-1 border border-surface-200">
+                  {["hours", "days"].map(u => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => set("lead_time_unit", u)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                        form.lead_time_unit === u
+                          ? "bg-white text-primary-700 shadow-sm"
+                          : "bg-transparent text-surface-500 hover:text-surface-700"
+                      }`}
+                    >
+                      {u === "hours" ? "Hours" : "Days"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {form.lead_time && parseFloat(form.lead_time) > 0 ? (
+                <p className="text-[11px] text-primary-600 mt-1.5 font-medium">
+                  Customers can only book at least {form.lead_time} {form.lead_time_unit} ahead.
+                </p>
+              ) : (
+                <p className="text-[11px] text-surface-400 mt-1.5">
+                  Leave empty for instant / same-day availability.
+                </p>
+              )}
             </div>
           </Section>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Eye, RefreshCw, CheckCircle2, XCircle, Clock, Package, ChevronDown, ChevronUp,
   X, User, Phone, Mail, MapPin, Calendar, MessageSquare, Image as ImageIcon, FileText,
@@ -35,8 +36,16 @@ function fmtAmount(total, currency) {
 
 /* ── Order detail drawer/modal ─────────────────────────────────────── */
 function OrderDetailModal({ orderId, onClose, onUpdateStatus, updatingId }) {
+  const { t } = useLocale();
+  const router = useRouter();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const goToProduct = (productId) => {
+    if (!productId) return;
+    onClose?.();
+    router.push(`/vendor/products?edit=${productId}`);
+  };
 
   useEffect(() => {
     if (!orderId) return;
@@ -74,7 +83,9 @@ function OrderDetailModal({ orderId, onClose, onUpdateStatus, updatingId }) {
             <p className="text-sm font-bold text-surface-900 mt-0.5">
               #{order?.id?.slice(-8).toUpperCase() || "…"}
               {order?.status && (
-                <span className={`ml-2 ${STATUS_BADGE[order.status?.toLowerCase()] || "badge badge-gray"}`}>{order.status}</span>
+                <span className={`ml-2 ${STATUS_BADGE[order.status?.toLowerCase()] || "badge badge-gray"}`}>
+                  {t(`orders.${order.status.toLowerCase()}`) || order.status}
+                </span>
               )}
             </p>
           </div>
@@ -173,21 +184,40 @@ function OrderDetailModal({ orderId, onClose, onUpdateStatus, updatingId }) {
                     const opts = it.options || it.parameters || it.params || it.attributes || null;
                     const optEntries = opts && typeof opts === "object" ? Object.entries(opts) : [];
                     const lineTotal = Number(it.unit_price || 0) * Number(it.quantity || 0);
+                    const productId = it.product_id || it.productId;
+                    const imgSrc = it.image_url || it.thumbnail_url || it.product_image || it.images?.[0]?.url || it.images?.[0];
+                    const isClickable = !!productId;
                     return (
                       <div key={i} className="px-5 py-4 flex gap-4">
-                        <div className="w-14 h-14 rounded-xl bg-surface-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                          {it.image_url || it.thumbnail_url ? (
-                            <img src={it.image_url || it.thumbnail_url} alt={it.product_name || "Item"} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => goToProduct(productId)}
+                          disabled={!isClickable}
+                          className={`w-16 h-16 rounded-xl bg-surface-100 overflow-hidden flex-shrink-0 flex items-center justify-center border-none p-0 ${
+                            isClickable ? "cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all" : "cursor-default"
+                          }`}
+                          aria-label={isClickable ? "Open product" : undefined}
+                        >
+                          {imgSrc ? (
+                            <img src={imgSrc} alt={it.product_name || "Item"} className="w-full h-full object-cover" />
                           ) : (
-                            <ImageIcon size={18} className="text-surface-300" />
+                            <ImageIcon size={20} className="text-surface-300" />
                           )}
-                        </div>
+                        </button>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-surface-900 leading-snug">
+                              <button
+                                type="button"
+                                onClick={() => goToProduct(productId)}
+                                disabled={!isClickable}
+                                className={`text-sm font-semibold text-surface-900 leading-snug border-none bg-transparent p-0 text-left ${
+                                  isClickable ? "cursor-pointer hover:text-primary-600 transition-colors" : "cursor-default"
+                                }`}
+                              >
                                 {it.product_name || "Item"}
-                              </p>
+                                {isClickable && <ExternalLink size={11} className="inline-block ml-1 -mt-0.5 opacity-60" />}
+                              </button>
                               {it.sku && <p className="text-[11px] text-surface-400 font-mono">SKU: {it.sku}</p>}
                             </div>
                             <p className="text-sm font-bold text-surface-900 flex-shrink-0">
@@ -336,7 +366,7 @@ function OrderDetailModal({ orderId, onClose, onUpdateStatus, updatingId }) {
                   className="flex-1 text-sm border border-surface-200 rounded-xl px-3 py-2 bg-white text-surface-700 cursor-pointer outline-none focus:border-primary-400"
                 >
                   {["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"].map(s => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    <option key={s} value={s}>{t(`orders.${s}`) || s}</option>
                   ))}
                 </select>
                 {updatingId === order.id && <RefreshCw size={14} className="text-surface-400 animate-spin" />}
@@ -351,6 +381,7 @@ function OrderDetailModal({ orderId, onClose, onUpdateStatus, updatingId }) {
 
 /* ── Order list card ───────────────────────────────────────────────── */
 function OrderCard({ order, updatingId, onUpdateStatus, onView }) {
+  const { t } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const isPending = order.status?.toLowerCase() === "pending";
 
@@ -371,7 +402,7 @@ function OrderCard({ order, updatingId, onUpdateStatus, onView }) {
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-bold text-surface-900">#{order.id?.slice(-8).toUpperCase()}</span>
               <span className={STATUS_BADGE[order.status?.toLowerCase()] || "badge badge-gray"}>
-                {order.status || "pending"}
+                {order.status ? (t(`orders.${order.status.toLowerCase()}`) || order.status) : t("orders.pending")}
               </span>
             </div>
             <p className="text-sm text-surface-600">
@@ -459,7 +490,7 @@ function OrderCard({ order, updatingId, onUpdateStatus, onView }) {
                 className="text-xs border border-surface-200 rounded-lg px-2 py-1.5 bg-white text-surface-700 cursor-pointer outline-none focus:border-primary-400"
               >
                 {DROPDOWN_STATUSES.map(s => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  <option key={s} value={s}>{t(`orders.${s}`) || s}</option>
                 ))}
               </select>
               {updatingId === order.id && (
@@ -540,7 +571,7 @@ export default function VendorOrders() {
                   : "bg-white text-surface-600 border-surface-200 hover:border-primary-300 hover:text-primary-600"
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === "all" ? t("common.all") : t(`orders.${f}`)}
               {f === "pending" && pendingCount > 0 && (
                 <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
               )}

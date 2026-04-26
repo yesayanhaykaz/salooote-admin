@@ -118,6 +118,15 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
   const [saved, setSaved]         = useState(false);
   const [activeLang, setActiveLang] = useState("en");
   const [categoryQuery, setCategoryQuery] = useState("");
+  // Lead time (min hours before delivery). Converts back to a friendly
+  // value+unit pair for the UI.
+  const initialLeadHours = initial?.lead_time_hours ?? initial?.min_lead_time_hours ?? null;
+  const [leadValue, leadUnit] = (() => {
+    if (initialLeadHours == null || initialLeadHours === 0) return ["", "hours"];
+    if (initialLeadHours % 24 === 0) return [String(initialLeadHours / 24), "days"];
+    return [String(initialLeadHours), "hours"];
+  })();
+
   const [form, setForm] = useState({
     name:              initial?.name              || "",
     description:       initial?.description       || "",
@@ -132,6 +141,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     stock:             initial?.stock_qty ?? initial?.stock ?? "",
     tags:              (initial?.tags || []).join(", "),
     status:            initial?.status            || "draft",
+    lead_time:         leadValue,                  // numeric string
+    lead_time_unit:    leadUnit,                   // "hours" | "days"
   });
   const [transForm, setTransForm] = useState({
     hy: getInitialTrans(initial?.translations, "hy"),
@@ -144,23 +155,30 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     setTransForm(f => ({ ...f, [locale]: { ...f[locale], [k]: v } }));
   };
 
-  const buildPayload = (status) => ({
-    name:              form.name.trim(),
-    description:       form.description,
-    short_description: form.short_description,
-    price:             parseFloat(form.price) || 0,
-    currency:          form.currency || "AMD",
-    sku:               form.sku,
-    stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
-    status:            status || form.status,
-    tags:              form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-    // send both for backward compat
-    ...(form.category_ids.length > 0 ? {
-      category_id:  form.category_ids[0],
-      category_ids: form.category_ids,
-    } : {}),
-    ...(form.compare_price !== "" ? { compare_price: parseFloat(form.compare_price) } : {}),
-  });
+  const buildPayload = (status) => {
+    // Compute total hours from lead_time + unit
+    const leadHours = form.lead_time !== "" && form.lead_time != null
+      ? Math.max(0, Math.round(parseFloat(form.lead_time) * (form.lead_time_unit === "days" ? 24 : 1)))
+      : null;
+    return {
+      name:              form.name.trim(),
+      description:       form.description,
+      short_description: form.short_description,
+      price:             parseFloat(form.price) || 0,
+      currency:          form.currency || "AMD",
+      sku:               form.sku,
+      stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
+      status:            status || form.status,
+      tags:              form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+      // Lead time — send under both names for backward compat with backend
+      ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
+      ...(form.category_ids.length > 0 ? {
+        category_id:  form.category_ids[0],
+        category_ids: form.category_ids,
+      } : {}),
+      ...(form.compare_price !== "" ? { compare_price: parseFloat(form.compare_price) } : {}),
+    };
+  };
 
   const handleSave = async (statusOverride) => {
     if (!form.name.trim()) return;
@@ -330,15 +348,27 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
                 <span className="ml-1.5 text-surface-400 font-normal text-[11px]">(select multiple)</span>
               </label>
 
-              {/* Locale-aware search input */}
+              {/* Active-language hint */}
+              <div className="flex items-center justify-between mb-2 text-[11px]">
+                <span className="text-surface-400">
+                  {activeLang === "hy" ? "Ցուցադրվում է հայերեն" :
+                   activeLang === "ru" ? "Показано на русском" :
+                   "Showing in English"}
+                </span>
+                <span className="text-primary-600 font-bold uppercase tracking-wide">
+                  {activeLang === "hy" ? "🇦🇲 HY" : activeLang === "ru" ? "🇷🇺 RU" : "🇺🇸 EN"}
+                </span>
+              </div>
+
+              {/* Active-lang search input */}
               <div className="flex items-center bg-white rounded-lg px-3 py-2 border border-surface-200 mb-2 gap-2 focus-within:border-primary-400 transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-400 flex-shrink-0"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
                 <input
                   value={categoryQuery}
                   onChange={e => setCategoryQuery(e.target.value)}
                   placeholder={
-                    locale === "hy" ? "Որոնել կատեգորիա…" :
-                    locale === "ru" ? "Поиск категории…" :
+                    activeLang === "hy" ? "Որոնել կատեգորիա…" :
+                    activeLang === "ru" ? "Поиск категории…" :
                     "Search categories…"
                   }
                   className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
@@ -362,24 +392,24 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
                 {(() => {
                   const visibleParents = categories.filter(parent => {
                     if (!categoryQuery) return true;
-                    if (categoryMatches(parent, categoryQuery, locale)) return true;
-                    return (parent.children || []).some(ch => categoryMatches(ch, categoryQuery, locale));
+                    if (categoryMatches(parent, categoryQuery, activeLang)) return true;
+                    return (parent.children || []).some(ch => categoryMatches(ch, categoryQuery, activeLang));
                   });
                   if (visibleParents.length === 0) {
                     return (
                       <p className="px-4 py-6 text-sm text-surface-400 text-center">
-                        {locale === "hy" ? "Ոչինչ չի գտնվել" : locale === "ru" ? "Ничего не найдено" : "No categories found"}
+                        {activeLang === "hy" ? "Ոչինչ չի գտնվել" : activeLang === "ru" ? "Ничего не найдено" : "No categories found"}
                       </p>
                     );
                   }
                   return visibleParents.map(parent => {
                     const items = [parent, ...(parent.children || []).filter(ch =>
-                      !categoryQuery || categoryMatches(ch, categoryQuery, locale) || categoryMatches(parent, categoryQuery, locale)
+                      !categoryQuery || categoryMatches(ch, categoryQuery, activeLang) || categoryMatches(parent, categoryQuery, activeLang)
                     )];
                     return items.map((c, ci) => {
                       const isChild = c.parent_id != null;
                       const checked = form.category_ids.includes(String(c.id));
-                      const displayName = getLocName(c, locale) || c.name;
+                      const displayName = getLocName(c, activeLang) || c.name;
                       return (
                         <label
                           key={c.id}
@@ -458,6 +488,54 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
                 </p>
               </div>
             )}
+
+            {/* Min lead time / earliest delivery */}
+            <div className="border-t border-surface-100 pt-4">
+              <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                Min lead time
+                <span className="ml-1.5 text-surface-400 font-normal text-[11px]">
+                  (earliest the order can be ready)
+                </span>
+              </label>
+              <div className="flex items-stretch gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step={form.lead_time_unit === "hours" ? "1" : "0.5"}
+                  value={form.lead_time}
+                  onChange={e => set("lead_time", e.target.value)}
+                  placeholder={form.lead_time_unit === "hours" ? "e.g. 4" : "e.g. 2"}
+                  className="flex-1 px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+                />
+                <div className="flex bg-surface-100 rounded-xl p-1 border border-surface-200">
+                  {["hours", "days"].map(u => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => set("lead_time_unit", u)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                        form.lead_time_unit === u
+                          ? "bg-white text-primary-700 shadow-sm"
+                          : "bg-transparent text-surface-500 hover:text-surface-700"
+                      }`}
+                    >
+                      {u === "hours" ? "Hours" : "Days"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {form.lead_time && parseFloat(form.lead_time) > 0 && (
+                <p className="text-[11px] text-primary-600 mt-1.5 font-medium">
+                  Customers will only be able to schedule deliveries at least{" "}
+                  {form.lead_time} {form.lead_time_unit} after placing the order.
+                </p>
+              )}
+              {(!form.lead_time || parseFloat(form.lead_time) === 0) && (
+                <p className="text-[11px] text-surface-400 mt-1.5">
+                  Leave empty for instant / same-day availability.
+                </p>
+              )}
+            </div>
           </Section>
         </div>
 
