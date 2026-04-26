@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Sparkles, X, Send, Loader2, Package, Wrench,
   Building2, Tag, ChevronRight, RotateCcw, User,
@@ -440,31 +440,132 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
 
 export default function AiChat({ role = "vendor" }) {
   const router = useRouter();
+  const pathname = usePathname() || "";
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  // Position is bottom-right offset in px. null = default (24, 24).
+  const [pos, setPos] = useState(null);
+  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, startRight: 0, startBottom: 0, moved: false });
 
   const fullPagePath = role === "vendor" ? "/vendor/ai" : "/admin/ai";
+  const onAIPage = pathname === "/vendor/ai" || pathname === "/admin/ai";
+
+  // Hydrate persisted preferences
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (sessionStorage.getItem("admin_ai_fab_dismissed") === "1") setDismissed(true);
+      const raw = localStorage.getItem("admin_ai_fab_pos");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && typeof p.right === "number" && typeof p.bottom === "number") setPos(p);
+      }
+    } catch {}
+  }, []);
+
+  const handleDismiss = useCallback((e) => {
+    e?.stopPropagation();
+    setDismissed(true);
+    try { sessionStorage.setItem("admin_ai_fab_dismissed", "1"); } catch {}
+  }, []);
+
+  // Drag logic — wraps both the button + panel since they share an anchor
+  const onPointerDown = useCallback((e) => {
+    if (typeof window === "undefined") return;
+    if (e.button != null && e.button !== 0) return;
+    const pt = e.touches?.[0] || e;
+    const startRight = pos?.right ?? 24;
+    const startBottom = pos?.bottom ?? 24;
+    dragRef.current = {
+      dragging: true,
+      startX: pt.clientX,
+      startY: pt.clientY,
+      startRight,
+      startBottom,
+      moved: false,
+    };
+    let nextPos = { right: startRight, bottom: startBottom };
+    const onMove = (ev) => {
+      const m = ev.touches?.[0] || ev;
+      const dx = m.clientX - dragRef.current.startX;
+      const dy = m.clientY - dragRef.current.startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragRef.current.moved = true;
+      nextPos = {
+        right:  Math.max(8, Math.min(window.innerWidth - 100, dragRef.current.startRight - dx)),
+        bottom: Math.max(8, Math.min(window.innerHeight - 80, dragRef.current.startBottom - dy)),
+      };
+      setPos(nextPos);
+    };
+    const onEnd = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      if (dragRef.current.moved) {
+        try { localStorage.setItem("admin_ai_fab_pos", JSON.stringify(nextPos)); } catch {}
+      }
+      setTimeout(() => { dragRef.current.dragging = false; }, 0);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onEnd);
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+  }, [pos]);
+
+  const handleButtonClick = useCallback((e) => {
+    if (dragRef.current.moved) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragRef.current.moved = false;
+      return;
+    }
+    setOpen(true);
+  }, []);
+
+  // Hide entirely on the dedicated AI page or after user dismisses
+  if (onAIPage || dismissed) return null;
+
+  const fabStyle = {
+    right: `${pos?.right ?? 24}px`,
+    bottom: `${pos?.bottom ?? 24}px`,
+  };
 
   return (
     <>
-      {/* Floating button */}
-      <button
-        onClick={() => setOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full shadow-xl text-white text-sm font-semibold border-none cursor-pointer transition-all hover:scale-105 active:scale-95 bg-gradient-to-r from-violet-600 to-primary-600 ${
-          open ? "opacity-0 pointer-events-none scale-90" : "opacity-100"
-        }`}
-        style={{ boxShadow: "0 8px 32px rgba(109,40,217,0.35)" }}
+      {/* Floating button (draggable) */}
+      <div
+        className={`fixed z-50 group ${open ? "opacity-0 pointer-events-none scale-90" : "opacity-100"} transition-all`}
+        style={fabStyle}
       >
-        <Sparkles size={16} />
-        {t("ai_assistant.title")}
-      </button>
+        <button
+          onMouseDown={onPointerDown}
+          onTouchStart={onPointerDown}
+          onClick={handleButtonClick}
+          className="flex items-center gap-2 px-4 py-3 rounded-full shadow-xl text-white text-sm font-semibold border-none transition-all hover:scale-105 active:scale-95 bg-gradient-to-r from-violet-600 to-primary-600 select-none"
+          style={{ boxShadow: "0 8px 32px rgba(109,40,217,0.35)", cursor: dragRef.current.dragging ? "grabbing" : "grab", userSelect: "none" }}
+          title={t("ai_assistant.title") + " — drag to move"}
+        >
+          <Sparkles size={16} className="pointer-events-none" />
+          <span className="pointer-events-none">{t("ai_assistant.title")}</span>
+        </button>
+        <button
+          onClick={handleDismiss}
+          aria-label="Hide AI assistant"
+          title="Hide for this session"
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-surface-500 hover:bg-surface-700 hover:text-white border border-surface-200 cursor-pointer flex items-center justify-center shadow-md transition-all opacity-0 group-hover:opacity-100"
+          style={{ padding: 0 }}
+        >
+          <X size={10} />
+        </button>
+      </div>
 
       {/* Floating panel */}
       <div
-        className={`fixed bottom-6 right-6 z-50 flex flex-col transition-all duration-300 ${
+        className={`fixed z-50 flex flex-col transition-all duration-300 ${
           open ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-6 pointer-events-none"
         }`}
-        style={{ width: 390, height: 600 }}
+        style={{ ...fabStyle, width: 390, height: 600 }}
       >
         <div
           className="flex flex-col h-full bg-surface-50 rounded-2xl border border-surface-200 overflow-hidden"
