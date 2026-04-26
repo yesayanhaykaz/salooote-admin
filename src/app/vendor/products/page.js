@@ -10,7 +10,7 @@ import TopBar from "@/components/TopBar";
 import DataTable from "@/components/DataTable";
 import ImageManager from "@/components/ImageManager";
 import RichTextEditor from "@/components/RichTextEditor";
-import { vendorAPI, adminCategoriesAPI } from "@/lib/api";
+import { vendorAPI, adminCategoriesAPI, uploadAPI } from "@/lib/api";
 import { useLocale } from "@/lib/i18n";
 
 /* ─── locale-aware name helper ───────────────────────────────────────────── */
@@ -19,6 +19,18 @@ function getLocName(item, locale) {
   if (locale === "en") return item.name || "";
   const trans = (item.translations || []).find(tr => tr.locale === locale);
   return trans?.name || item.name || "";
+}
+
+/* ─── multilingual category match (active locale + EN fallback) ──────────── */
+function categoryMatches(c, query, locale) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const candidates = [
+    c.name,
+    getLocName(c, locale),
+    ...(c.translations || []).map(tr => tr.name),
+  ].filter(Boolean);
+  return candidates.some(s => s.toLowerCase().includes(q));
 }
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
@@ -97,13 +109,15 @@ function getInitialTrans(translations, locale) {
 }
 
 /* ─── Full-page product editor ───────────────────────────────────────────── */
-function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
+function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, locale = "en" }) {
   const isNew = !initial?.id;
   const [productId, setProductId] = useState(initial?.id || null);
   const [images, setImages]       = useState(initial?.images || []);
+  const [stagedFiles, setStagedFiles] = useState([]); // For images selected before product is created
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
   const [activeLang, setActiveLang] = useState("en");
+  const [categoryQuery, setCategoryQuery] = useState("");
   const [form, setForm] = useState({
     name:              initial?.name              || "",
     description:       initial?.description       || "",
@@ -154,7 +168,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
     try {
       const payload = buildPayload(statusOverride);
       let pid = productId || initial?.id;
-      if (isNew && !productId) {
+      const isFreshCreate = isNew && !productId;
+      if (isFreshCreate) {
         const res = await onCreate(payload);
         pid = res?.data?.id;
         if (pid) setProductId(pid);
@@ -162,6 +177,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
         await onUpdate(pid, payload);
       }
       if (pid) {
+        // Save translations
         await Promise.all(
           ["hy", "ru"]
             .filter(loc => transForm[loc].name || transForm[loc].description || transForm[loc].short_description)
@@ -169,6 +185,30 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
               vendorAPI.upsertProductTranslation(pid, loc, { ...transForm[loc] }).catch(() => {})
             )
         );
+
+        // Upload staged images (only on fresh create or if files exist)
+        if (stagedFiles.length > 0) {
+          const uploaded = [];
+          for (const file of stagedFiles) {
+            try {
+              const res = await uploadAPI.productImage(pid, file);
+              if (res?.data) uploaded.push(res.data);
+            } catch (e) {
+              console.error("Image upload failed:", e);
+            }
+          }
+          if (uploaded.length > 0) {
+            // Try to set the first uploaded as primary if none is yet
+            try {
+              const firstId = uploaded[0]?.id;
+              if (firstId && !uploaded.some(u => u.is_primary)) {
+                await uploadAPI.setProductImagePrimary(pid, firstId).catch(() => {});
+              }
+            } catch {}
+            setImages(prev => [...prev, ...uploaded]);
+          }
+          setStagedFiles([]);
+        }
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -289,48 +329,89 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
                 {t("common.category")}
                 <span className="ml-1.5 text-surface-400 font-normal text-[11px]">(select multiple)</span>
               </label>
+
+              {/* Locale-aware search input */}
+              <div className="flex items-center bg-white rounded-lg px-3 py-2 border border-surface-200 mb-2 gap-2 focus-within:border-primary-400 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-400 flex-shrink-0"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+                <input
+                  value={categoryQuery}
+                  onChange={e => setCategoryQuery(e.target.value)}
+                  placeholder={
+                    locale === "hy" ? "Որոնել կատեգորիա…" :
+                    locale === "ru" ? "Поиск категории…" :
+                    "Search categories…"
+                  }
+                  className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
+                />
+                {categoryQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setCategoryQuery("")}
+                    className="text-surface-400 hover:text-surface-700 cursor-pointer border-none bg-transparent text-sm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
               {/* Multi-category checkbox panel */}
-              <div className="border border-surface-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+              <div className="border border-surface-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
                 {categories.length === 0 && (
                   <p className="px-4 py-3 text-sm text-surface-400">{t("common.loading")}</p>
                 )}
-                {categories.map(cat => {
-                  // Show parent + its children
-                  const items = [cat, ...(cat.children || [])];
-                  return items.map((c, ci) => {
-                    const isChild = c.parent_id != null;
-                    const checked = form.category_ids.includes(String(c.id));
-                    return (
-                      <label
-                        key={c.id}
-                        className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-surface-50 transition-colors ${
-                          ci < items.length - 1 ? "border-b border-surface-100" : ""
-                        } ${isChild ? "pl-8 bg-surface-50/50" : ""}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={e => {
-                            const id = String(c.id);
-                            if (e.target.checked) {
-                              set("category_ids", [...form.category_ids, id]);
-                            } else {
-                              set("category_ids", form.category_ids.filter(x => x !== id));
-                            }
-                          }}
-                          className="w-4 h-4 rounded accent-violet-600 cursor-pointer"
-                        />
-                        {c.color && (
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
-                        )}
-                        <span className={`text-sm ${isChild ? "text-surface-600" : "font-medium text-surface-800"}`}>
-                          {c.emoji ? `${c.emoji} ` : ""}{c.name}
-                        </span>
-                        {checked && <span className="ml-auto text-[10px] text-violet-500 font-semibold">✓</span>}
-                      </label>
-                    );
+                {(() => {
+                  const visibleParents = categories.filter(parent => {
+                    if (!categoryQuery) return true;
+                    if (categoryMatches(parent, categoryQuery, locale)) return true;
+                    return (parent.children || []).some(ch => categoryMatches(ch, categoryQuery, locale));
                   });
-                })}
+                  if (visibleParents.length === 0) {
+                    return (
+                      <p className="px-4 py-6 text-sm text-surface-400 text-center">
+                        {locale === "hy" ? "Ոչինչ չի գտնվել" : locale === "ru" ? "Ничего не найдено" : "No categories found"}
+                      </p>
+                    );
+                  }
+                  return visibleParents.map(parent => {
+                    const items = [parent, ...(parent.children || []).filter(ch =>
+                      !categoryQuery || categoryMatches(ch, categoryQuery, locale) || categoryMatches(parent, categoryQuery, locale)
+                    )];
+                    return items.map((c, ci) => {
+                      const isChild = c.parent_id != null;
+                      const checked = form.category_ids.includes(String(c.id));
+                      const displayName = getLocName(c, locale) || c.name;
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-surface-50 transition-colors ${
+                            ci < items.length - 1 ? "border-b border-surface-100" : ""
+                          } ${isChild ? "pl-8 bg-surface-50/50" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={e => {
+                              const id = String(c.id);
+                              if (e.target.checked) {
+                                set("category_ids", [...form.category_ids, id]);
+                              } else {
+                                set("category_ids", form.category_ids.filter(x => x !== id));
+                              }
+                            }}
+                            className="w-4 h-4 rounded accent-violet-600 cursor-pointer"
+                          />
+                          {c.color && (
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }} />
+                          )}
+                          <span className={`text-sm ${isChild ? "text-surface-600" : "font-medium text-surface-800"}`}>
+                            {c.emoji ? `${c.emoji} ` : ""}{displayName}
+                          </span>
+                          {checked && <span className="ml-auto text-[10px] text-violet-500 font-semibold">✓</span>}
+                        </label>
+                      );
+                    });
+                  });
+                })()}
               </div>
               {form.category_ids.length > 0 && (
                 <p className="text-[11px] text-violet-600 mt-1.5 font-medium">
@@ -419,16 +500,22 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
           <div className="bg-white rounded-2xl border border-surface-200 p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-surface-700 uppercase tracking-wider">{t("common.images")}</p>
-              {images.length > 0 && (
-                <span className="text-[11px] text-surface-400">{images.length} {t("common.uploaded")}</span>
+              {(images.length > 0 || stagedFiles.length > 0) && (
+                <span className="text-[11px] text-surface-400">
+                  {images.length > 0 && `${images.length} ${t("common.uploaded")}`}
+                  {images.length > 0 && stagedFiles.length > 0 && " · "}
+                  {stagedFiles.length > 0 && `${stagedFiles.length} pending`}
+                </span>
               )}
             </div>
-            {!productId && (
-              <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
-                <p className="text-[11px] text-amber-700 font-medium">{t("products.save_first")}</p>
-              </div>
-            )}
-            <ImageManager entityId={productId} type="product" images={images} onChange={setImages} />
+            <ImageManager
+              entityId={productId}
+              type="product"
+              images={images}
+              onChange={setImages}
+              onStage={setStagedFiles}
+              stagedFiles={stagedFiles}
+            />
           </div>
 
           {(form.name || form.price) && (
@@ -439,7 +526,12 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t }) {
                 {form.price && <div className="flex justify-between"><span className="text-surface-400">{t("common.price_label")}</span><span className="font-medium">{form.currency} {parseFloat(form.price).toLocaleString()}</span></div>}
                 {form.sku && <div className="flex justify-between"><span className="text-surface-400">{t("products.sku")}</span><span className="font-medium">{form.sku}</span></div>}
                 {form.category_ids.length > 0 && <div className="flex justify-between"><span className="text-surface-400">{t("common.category")}</span><span className="font-medium text-violet-600">{form.category_ids.length} selected</span></div>}
-                <div className="flex justify-between"><span className="text-surface-400">{t("common.images")}</span><span className="font-medium">{images.length}</span></div>
+                <div className="flex justify-between"><span className="text-surface-400">{t("common.images")}</span>
+                  <span className="font-medium">
+                    {images.length}
+                    {stagedFiles.length > 0 && <span className="text-amber-600"> +{stagedFiles.length} pending</span>}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-surface-400">{t("common.languages")}</span>
                   <span className="font-medium text-primary-600">
@@ -521,8 +613,8 @@ export default function VendorProducts() {
   const handleUnpublish= async (id) => { try { await vendorAPI.unpublishProduct(id); setProducts(prev => prev.map(p => p.id === id ? { ...p, status: "draft" }  : p)); } catch (e) { console.error(e); } };
   const goBack = () => { setMode("list"); setEditProduct(null); fetchProducts(); };
 
-  if (mode === "create") return <ProductEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
-  if (mode === "edit" && editProduct) return <ProductEditor initial={editProduct} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} />;
+  if (mode === "create") return <ProductEditor initial={null} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} locale={locale} />;
+  if (mode === "edit" && editProduct) return <ProductEditor initial={editProduct} categories={categories} onBack={goBack} onCreate={handleCreate} onUpdate={handleUpdate} t={t} locale={locale} />;
 
   const filtered = products.filter(p => {
     if (filterCat) {
@@ -596,9 +688,9 @@ export default function VendorProducts() {
           className="px-3 py-1.5 border border-surface-200 rounded-lg text-sm bg-white outline-none cursor-pointer text-surface-700">
           <option value="">{t("products.all_categories")}</option>
           {categories.flatMap(c => [
-            <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>,
+            <option key={c.id} value={c.id}>{c.emoji} {getLocName(c, locale) || c.name}</option>,
             ...(c.children || []).map(ch => (
-              <option key={ch.id} value={ch.id}>　{ch.emoji} {ch.name}</option>
+              <option key={ch.id} value={ch.id}>　{ch.emoji} {getLocName(ch, locale) || ch.name}</option>
             ))
           ])}
         </select>

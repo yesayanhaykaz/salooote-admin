@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, CalendarDays, Lock } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ChevronLeft, ChevronRight, CalendarDays, Lock, X, Clock, User, Package, ShoppingBag, MapPin, Phone } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import { vendorAPI } from "@/lib/api";
 import { useLocale } from "@/lib/i18n";
@@ -11,10 +11,35 @@ const DAY_KEYS   = ["mon","tue","wed","thu","fri","sat","sun"];
 const STATUS_CHIP = {
   confirmed:   "bg-success-500 text-white",
   pending:     "bg-warning-500 text-white",
+  processing:  "bg-info-500 text-white",
   in_progress: "bg-info-500 text-white",
+  shipped:     "bg-info-500 text-white",
+  delivered:   "bg-success-500 text-white",
   completed:   "bg-surface-400 text-white",
   cancelled:   "bg-danger-200 text-danger-600",
 };
+
+const STATUS_BADGE = {
+  confirmed:   "bg-success-50 text-success-700 border-success-200",
+  pending:     "bg-warning-50 text-warning-700 border-warning-200",
+  processing:  "bg-info-50 text-info-700 border-info-200",
+  shipped:     "bg-info-50 text-info-700 border-info-200",
+  delivered:   "bg-success-50 text-success-700 border-success-200",
+  cancelled:   "bg-danger-50 text-danger-700 border-danger-200",
+};
+
+function fmtAmount(total, currency) {
+  if (total == null) return "";
+  return `${currency || "AMD"} ${Number(total).toLocaleString()}`;
+}
+
+function fmtTime(iso, time) {
+  if (time) return time;
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  } catch { return null; }
+}
 
 const WORKING_DAYS_DEFAULT = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false };
 
@@ -35,19 +60,66 @@ export default function VendorCalendar() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [bookings, setBookings] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [blockedDays, setBlockedDays] = useState(new Set());
   const [blockStart, setBlockStart] = useState("");
   const [blockEnd, setBlockEnd] = useState("");
   const [blockReason, setBlockReason] = useState("");
   const [workingDays, setWorkingDays] = useState(WORKING_DAYS_DEFAULT);
+  const [selectedDay, setSelectedDay] = useState(null); // {year, month, day} for detail modal
 
   useEffect(() => {
-    vendorAPI.bookings({ limit: 100 })
-      .then(res => setBookings(res?.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      vendorAPI.bookings({ limit: 200 }).catch(() => null),
+      vendorAPI.orders({ limit: 200 }).catch(() => null),
+    ]).then(([bRes, oRes]) => {
+      setBookings(bRes?.data || []);
+      setOrders(oRes?.data || []);
+    }).finally(() => setLoading(false));
   }, []);
+
+  // Merge bookings + orders into a unified "events" stream by date
+  const events = useMemo(() => {
+    const out = [];
+    bookings.forEach(b => {
+      if (!b.event_date) return;
+      out.push({
+        kind: "booking",
+        id: b.id,
+        date: b.event_date,
+        time: b.event_time || fmtTime(b.event_date),
+        title: b.event_type || "Booking",
+        customer: b.user_name || b.customer_name,
+        phone: b.customer_phone,
+        location: b.location,
+        status: (b.status || "pending").toLowerCase(),
+        guest_count: b.guest_count,
+        budget: b.budget,
+        notes: b.notes,
+      });
+    });
+    orders.forEach(o => {
+      const refDate = o.event_date || o.delivery_date;
+      if (!refDate) return;
+      out.push({
+        kind: "order",
+        id: o.id,
+        date: refDate,
+        time: o.event_time || o.delivery_time || null,
+        title: (o.items?.[0]?.product_name || "Order") + (o.items?.length > 1 ? ` +${o.items.length - 1}` : ""),
+        customer: o.user_name || o.shipping_name || o.customer_name,
+        phone: o.customer_phone || o.shipping_phone,
+        address: o.shipping_address,
+        status: (o.status || "pending").toLowerCase(),
+        total: o.total,
+        currency: o.currency,
+        items: o.items,
+        notes: o.notes,
+      });
+    });
+    return out;
+  }, [bookings, orders]);
 
   const prevMonth = () => {
     if (month === 0) { setMonth(11); setYear(y => y - 1); }
@@ -58,16 +130,24 @@ export default function VendorCalendar() {
     else setMonth(m => m + 1);
   };
 
-  const bookingsByDay = {};
-  bookings.forEach(b => {
-    if (!b.event_date) return;
-    const d = new Date(b.event_date);
-    if (d.getFullYear() === year && d.getMonth() === month) {
-      const day = d.getDate();
-      if (!bookingsByDay[day]) bookingsByDay[day] = [];
-      bookingsByDay[day].push(b);
-    }
-  });
+  const eventsByDay = useMemo(() => {
+    const map = {};
+    events.forEach(ev => {
+      const d = new Date(ev.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const day = d.getDate();
+        if (!map[day]) map[day] = [];
+        map[day].push(ev);
+      }
+    });
+    // Sort each day by time
+    Object.values(map).forEach(arr => arr.sort((a, b) => (a.time || "").localeCompare(b.time || "")));
+    return map;
+  }, [events, year, month]);
+
+  const selectedDayEvents = selectedDay
+    ? (eventsByDay[selectedDay.day] || [])
+    : [];
 
   const cells = getMonthGrid(year, month);
   const today = now.getDate();
@@ -94,9 +174,9 @@ export default function VendorCalendar() {
     setBlockedDays(newBlocked);
   };
 
-  const upcoming = bookings
-    .filter(b => b.event_date && new Date(b.event_date) >= now)
-    .sort((a, b) => new Date(a.event_date) - new Date(b.event_date))
+  const upcoming = events
+    .filter(ev => ev.date && new Date(ev.date) >= new Date(new Date().toDateString()))
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 5);
 
   const LEGEND = [
@@ -147,35 +227,50 @@ export default function VendorCalendar() {
               <div className="grid grid-cols-7">
                 {cells.map((day, idx) => {
                   if (!day) {
-                    return <div key={`empty-${idx}`} className="min-h-[90px] border-b border-r border-surface-50 bg-surface-50/50 last:border-r-0" />;
+                    return <div key={`empty-${idx}`} className="min-h-[100px] border-b border-r border-surface-50 bg-surface-50/50 last:border-r-0" />;
                   }
-                  const isBlocked   = blockedDays.has(day);
-                  const isToday     = isCurrentMonth && day === today;
-                  const dayBookings = bookingsByDay[day] || [];
+                  const isBlocked = blockedDays.has(day);
+                  const isToday   = isCurrentMonth && day === today;
+                  const dayEvents = eventsByDay[day] || [];
+                  const hasEvents = dayEvents.length > 0;
                   const col = idx % 7;
                   const isWeekend = col === 5 || col === 6;
 
                   return (
-                    <div
+                    <button
                       key={day}
-                      onClick={() => !dayBookings.length && toggleBlock(day)}
-                      className={`min-h-[90px] p-2 border-b border-r border-surface-100 last:border-r-0 relative transition-colors ${
+                      type="button"
+                      onClick={() => {
+                        if (hasEvents) {
+                          setSelectedDay({ year, month, day });
+                        } else {
+                          toggleBlock(day);
+                        }
+                      }}
+                      className={`min-h-[100px] p-2 border-b border-r border-surface-100 last:border-r-0 relative transition-colors text-left cursor-pointer w-full ${
                         isBlocked ? "bg-danger-50" : isWeekend ? "bg-surface-50/60" : "bg-white"
-                      } ${!dayBookings.length ? "cursor-pointer hover:bg-primary-50/30" : ""}`}
+                      } ${hasEvents ? "hover:bg-primary-50/40 ring-inset hover:ring-1 hover:ring-primary-200" : "hover:bg-primary-50/30"} border-l-0 border-t-0 font-[inherit]`}
                     >
-                      <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-semibold mb-1 ${
-                        isToday
-                          ? "bg-primary-600 text-white"
-                          : isBlocked
-                          ? "text-danger-500"
-                          : isWeekend
-                          ? "text-surface-400"
-                          : "text-surface-700"
-                      }`}>
-                        {day}
-                      </span>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs font-semibold ${
+                          isToday
+                            ? "bg-primary-600 text-white"
+                            : isBlocked
+                            ? "text-danger-500"
+                            : isWeekend
+                            ? "text-surface-400"
+                            : "text-surface-700"
+                        }`}>
+                          {day}
+                        </span>
+                        {hasEvents && (
+                          <span className="text-[9px] font-bold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full">
+                            {dayEvents.length}
+                          </span>
+                        )}
+                      </div>
 
-                      {isBlocked && !dayBookings.length && (
+                      {isBlocked && !hasEvents && (
                         <div className="flex items-center gap-0.5 mt-0.5">
                           <Lock size={10} className="text-danger-400" />
                           <span className="text-[9px] text-danger-400 font-medium">{t("calendar.blocked")}</span>
@@ -183,16 +278,23 @@ export default function VendorCalendar() {
                       )}
 
                       <div className="space-y-0.5 mt-0.5">
-                        {dayBookings.map(b => (
+                        {dayEvents.slice(0, 3).map(ev => (
                           <div
-                            key={b.id}
-                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md truncate ${STATUS_CHIP[b.status] || "bg-surface-200 text-surface-700"}`}
+                            key={`${ev.kind}-${ev.id}`}
+                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md truncate flex items-center gap-1 ${STATUS_CHIP[ev.status] || "bg-surface-200 text-surface-700"}`}
+                            title={`${ev.title} — ${ev.customer || ""}`}
                           >
-                            {b.event_type || b.user_name || t("calendar.booking_fallback")}
+                            {ev.kind === "order" ? <ShoppingBag size={8} className="flex-shrink-0" /> : <CalendarDays size={8} className="flex-shrink-0" />}
+                            <span className="truncate">{ev.title}</span>
                           </div>
                         ))}
+                        {dayEvents.length > 3 && (
+                          <div className="text-[9px] font-semibold text-primary-600 pl-1">
+                            +{dayEvents.length - 3} more
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -225,27 +327,33 @@ export default function VendorCalendar() {
                 {!loading && upcoming.length === 0 && (
                   <div className="px-4 py-6 text-xs text-surface-400 text-center">{t("calendar.no_upcoming_bookings")}</div>
                 )}
-                {upcoming.map(b => {
-                  const d = new Date(b.event_date);
+                {upcoming.map(ev => {
+                  const d = new Date(ev.date);
                   const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                   return (
-                    <div key={b.id} className="px-4 py-3 hover:bg-surface-50 transition-colors">
+                    <button
+                      key={`${ev.kind}-${ev.id}`}
+                      type="button"
+                      onClick={() => setSelectedDay({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate() })}
+                      className="w-full text-left px-4 py-3 hover:bg-surface-50 transition-colors cursor-pointer border-none bg-transparent"
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-surface-800 truncate">{b.user_name || t("calendar.client_fallback")}</p>
-                          <p className="text-[11px] text-surface-500 truncate">{b.event_type || t("calendar.booking_fallback")}</p>
+                          <p className="text-xs font-semibold text-surface-800 truncate flex items-center gap-1">
+                            {ev.kind === "order" ? <ShoppingBag size={10} className="flex-shrink-0 text-primary-500" /> : <CalendarDays size={10} className="flex-shrink-0 text-primary-500" />}
+                            {ev.customer || t("calendar.client_fallback")}
+                          </p>
+                          <p className="text-[11px] text-surface-500 truncate">{ev.title}</p>
                         </div>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                          b.status === "confirmed" ? "bg-success-50 text-success-600" : "bg-warning-50 text-warning-600"
-                        }`}>
-                          {t(`calendar.${b.status}`) || b.status}
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 border ${STATUS_BADGE[ev.status] || "bg-surface-50 text-surface-600 border-surface-200"}`}>
+                          {ev.status}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 mt-1">
-                        <CalendarDays size={10} className="text-surface-400" />
-                        <span className="text-[10px] text-surface-400">{label}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-surface-400 flex items-center gap-1"><CalendarDays size={10} />{label}</span>
+                        {ev.time && <span className="text-[10px] text-surface-400 flex items-center gap-1"><Clock size={10} />{ev.time}</span>}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -320,6 +428,162 @@ export default function VendorCalendar() {
           </div>
         </div>
       </main>
+
+      {selectedDay && (
+        <DayDetailModal
+          day={selectedDay}
+          events={selectedDayEvents}
+          t={t}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Day detail modal — shows all events for a single day ──────── */
+function DayDetailModal({ day, events, onClose, t }) {
+  const dateObj = new Date(day.year, day.month, day.day);
+  const dateLabel = dateObj.toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+  });
+
+  const counts = {
+    order: events.filter(e => e.kind === "order").length,
+    booking: events.filter(e => e.kind === "booking").length,
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative bg-surface-50 w-full max-w-2xl shadow-2xl rounded-t-2xl sm:rounded-2xl flex flex-col max-h-[90vh] sm:max-h-[80vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-white border-b border-surface-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-surface-400">Day Schedule</p>
+            <p className="text-base font-bold text-surface-900 mt-0.5">{dateLabel}</p>
+            <div className="mt-2 flex items-center gap-3 text-xs text-surface-500">
+              {counts.order > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <ShoppingBag size={12} className="text-primary-500" /> {counts.order} order{counts.order !== 1 ? "s" : ""}
+                </span>
+              )}
+              {counts.booking > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <CalendarDays size={12} className="text-primary-500" /> {counts.booking} booking{counts.booking !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-100 cursor-pointer border-none bg-transparent transition-colors flex-shrink-0"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {events.length === 0 ? (
+            <div className="py-16 text-center text-sm text-surface-400">No events on this day.</div>
+          ) : (
+            events.map(ev => (
+              <div key={`${ev.kind}-${ev.id}`} className="bg-white rounded-2xl border border-surface-200 p-4 hover:border-primary-200 hover:shadow-sm transition-all">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                    ev.kind === "order" ? "bg-primary-50 text-primary-600" : "bg-violet-50 text-violet-600"
+                  }`}>
+                    {ev.kind === "order" ? <ShoppingBag size={16} /> : <CalendarDays size={16} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-surface-900 leading-snug truncate">{ev.title}</p>
+                        <p className="text-xs text-surface-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                          {ev.time && (
+                            <span className="inline-flex items-center gap-1">
+                              <Clock size={11} className="text-surface-400" /> {ev.time}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1">
+                            <User size={11} className="text-surface-400" /> {ev.customer || "—"}
+                          </span>
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border flex-shrink-0 ${STATUS_BADGE[ev.status] || "bg-surface-50 text-surface-600 border-surface-200"}`}>
+                        {ev.status}
+                      </span>
+                    </div>
+
+                    {/* Details */}
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {ev.phone && (
+                        <a href={`tel:${ev.phone.replace(/\s/g, "")}`} className="flex items-center gap-1.5 text-surface-600 hover:text-primary-600 transition-colors">
+                          <Phone size={11} className="text-surface-400" />{ev.phone}
+                        </a>
+                      )}
+                      {ev.location && (
+                        <p className="flex items-center gap-1.5 text-surface-600">
+                          <MapPin size={11} className="text-surface-400" />{ev.location}
+                        </p>
+                      )}
+                      {ev.address && (
+                        <p className="flex items-center gap-1.5 text-surface-600 sm:col-span-2 truncate">
+                          <MapPin size={11} className="text-surface-400" />{ev.address}
+                        </p>
+                      )}
+                      {ev.guest_count && (
+                        <p className="flex items-center gap-1.5 text-surface-600">
+                          <User size={11} className="text-surface-400" />{ev.guest_count} guests
+                        </p>
+                      )}
+                      {ev.total != null && (
+                        <p className="flex items-center gap-1.5 font-bold text-surface-900">
+                          <Package size={11} className="text-surface-400" />{fmtAmount(ev.total, ev.currency)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Items list (orders) */}
+                    {ev.kind === "order" && ev.items?.length > 0 && (
+                      <div className="mt-3 space-y-1 border-t border-surface-100 pt-2.5">
+                        {ev.items.slice(0, 3).map((it, i) => (
+                          <div key={i} className="text-xs text-surface-600 flex items-center justify-between">
+                            <span className="truncate">{it.product_name || "Item"} × {it.quantity}</span>
+                            <span className="text-surface-400 ml-2 flex-shrink-0">{fmtAmount(Number(it.unit_price || 0) * Number(it.quantity || 0), ev.currency)}</span>
+                          </div>
+                        ))}
+                        {ev.items.length > 3 && (
+                          <p className="text-[11px] text-surface-400 italic">+{ev.items.length - 3} more item{ev.items.length - 3 !== 1 ? "s" : ""}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {ev.notes && (
+                      <p className="mt-2 text-xs text-surface-500 italic bg-surface-50 rounded-lg px-2.5 py-1.5 border border-surface-100">
+                        {ev.notes}
+                      </p>
+                    )}
+
+                    {/* Quick action */}
+                    <div className="mt-3">
+                      <a
+                        href={ev.kind === "order" ? `/vendor/orders` : `/vendor/inquiries`}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors no-underline"
+                      >
+                        Open in {ev.kind === "order" ? "Orders" : "Inquiries"} →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

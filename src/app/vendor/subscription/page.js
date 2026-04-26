@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Check, Zap, Crown, Star, AlertCircle, CreditCard, X, Save } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Check, Zap, Crown, Star, AlertCircle, CreditCard, X, Save, RefreshCw, Clock, CalendarCheck } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import { vendorAPI } from "@/lib/api";
 
@@ -30,6 +30,14 @@ function fmtAMD(n) {
 function fmtDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function daysBetween(target) {
+  if (!target) return null;
+  const now = new Date();
+  const t = new Date(target);
+  const ms = t.getTime() - now.getTime();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
 // ─── Payment Method Modal ────────────────────────────────────────────────────
@@ -146,8 +154,24 @@ export default function VendorSubscription() {
   const [changing, setChanging]     = useState(null); // slug being applied
   const [cancelling, setCancelling] = useState(false);
   const [showCardModal, setShowCardModal] = useState(false);
+  const [renewing, setRenewing] = useState(false);
 
   const paymentMethod = profile?.payment_method || null;
+
+  // Compute renewal info
+  const renewalInfo = useMemo(() => {
+    if (!current) return null;
+    const remaining = daysBetween(current.ends_at);
+    const currentPlan = current.plan || {};
+    const isFree = currentPlan.is_free || currentPlan.price === 0;
+    return {
+      remaining,                                              // days remaining (negative if expired)
+      isExpired: remaining != null && remaining < 0,
+      isExpiringSoon: remaining != null && remaining >= 0 && remaining <= 7,
+      renewalPrice: currentPlan.price || 0,
+      isFree,
+    };
+  }, [current]);
 
   useEffect(() => {
     Promise.all([
@@ -202,6 +226,26 @@ export default function VendorSubscription() {
     setProfile(prev => ({ ...prev, payment_method: masked }));
   };
 
+  const handleRenew = async () => {
+    if (!current?.plan?.slug) return;
+    if (!paymentMethod && !renewalInfo?.isFree) {
+      if (!confirm("You don't have a payment method on file. Add one now?")) return;
+      setShowCardModal(true);
+      return;
+    }
+    if (!confirm(`Renew the ${current.plan.name} plan for ${fmtAMD(renewalInfo?.renewalPrice || 0)}?`)) return;
+    setRenewing(true);
+    try {
+      const res = await vendorAPI.renewSubscription(current.plan.slug);
+      if (res?.data) setCurrent(res.data);
+      // Refresh billing history
+      vendorAPI.billingHistory().catch(() => null).then(r => setHistory(r?.data || []));
+    } catch (e) {
+      alert("Failed to renew: " + (e?.message || "Unknown error"));
+    }
+    setRenewing(false);
+  };
+
   return (
     <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
       <TopBar title="Subscription" subtitle="Manage your plan and billing" />
@@ -210,30 +254,94 @@ export default function VendorSubscription() {
 
         {/* Current Plan Banner */}
         {!loading && current && (
-          <div className={`rounded-xl p-5 flex items-center justify-between flex-wrap gap-4 ${
-            current.status === "cancelled" ? "bg-surface-700" : "bg-primary-600"
+          <div className={`rounded-2xl p-6 ${
+            current.status === "cancelled"
+              ? "bg-gradient-to-br from-surface-700 to-surface-800"
+              : renewalInfo?.isExpired
+              ? "bg-gradient-to-br from-danger-600 to-danger-700"
+              : renewalInfo?.isExpiringSoon
+              ? "bg-gradient-to-br from-amber-500 to-amber-600"
+              : "bg-gradient-to-br from-primary-600 to-primary-700"
           }`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <Zap size={20} className="text-white" />
+            <div className="flex items-start justify-between flex-wrap gap-5">
+              <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Zap size={22} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-white font-bold text-lg leading-tight">{current.plan?.name} Plan</p>
+                    <span className="text-[11px] font-bold px-2 py-0.5 bg-white/20 rounded-full uppercase tracking-wide text-white">
+                      {current.status}
+                    </span>
+                  </div>
+                  <p className="text-white/75 text-xs mt-1">
+                    Active since {fmtDate(current.starts_at)}
+                    {current.cancelled_at ? ` · Cancelled ${fmtDate(current.cancelled_at)}` : ""}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-white font-bold text-base">
-                  {current.plan?.name} Plan
-                  <span className="ml-2 text-xs font-semibold px-2 py-0.5 bg-white/20 rounded-full capitalize">{current.status}</span>
-                </p>
-                <p className="text-white/70 text-xs mt-0.5">
-                  Active since {fmtDate(current.starts_at)}
-                  {current.ends_at ? ` · Expires ${fmtDate(current.ends_at)}` : ""}
-                  {current.cancelled_at ? ` · Cancelled ${fmtDate(current.cancelled_at)}` : ""}
-                </p>
-              </div>
+
+              {/* Renewal stats grid */}
+              {!renewalInfo?.isFree && current.ends_at && (
+                <div className="grid grid-cols-3 gap-3 sm:gap-5 text-white">
+                  <div className="bg-white/10 rounded-xl px-4 py-3 backdrop-blur-sm border border-white/15 min-w-[110px]">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Expires</p>
+                    <p className="text-sm font-bold mt-1 leading-tight">{fmtDate(current.ends_at)}</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl px-4 py-3 backdrop-blur-sm border border-white/15 min-w-[110px]">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                      {renewalInfo?.isExpired ? "Expired" : "Days Left"}
+                    </p>
+                    <p className="text-sm font-bold mt-1 leading-tight">
+                      {renewalInfo?.remaining != null
+                        ? renewalInfo.isExpired
+                          ? `${Math.abs(renewalInfo.remaining)} days ago`
+                          : `${renewalInfo.remaining} day${renewalInfo.remaining === 1 ? "" : "s"}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl px-4 py-3 backdrop-blur-sm border border-white/15 min-w-[110px]">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Renewal</p>
+                    <p className="text-sm font-bold mt-1 leading-tight">{fmtAMD(renewalInfo?.renewalPrice)}/mo</p>
+                  </div>
+                </div>
+              )}
             </div>
-            {current.status === "active" && !current.plan?.is_free && (
-              <button onClick={handleCancel} disabled={cancelling}
-                className="px-4 py-2 bg-white/15 border border-white/25 text-white text-sm font-medium rounded-lg hover:bg-white/25 transition-colors cursor-pointer disabled:opacity-40">
-                {cancelling ? "Cancelling…" : "Cancel Plan"}
-              </button>
+
+            {/* Action row */}
+            {(current.status === "active" || current.status === "cancelled") && !renewalInfo?.isFree && (
+              <div className="mt-5 flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleRenew}
+                  disabled={renewing}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-primary-700 text-sm font-bold rounded-xl hover:bg-white/95 transition-all shadow cursor-pointer border-none disabled:opacity-60 disabled:cursor-wait"
+                >
+                  {renewing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  {renewing ? "Renewing…" : renewalInfo?.isExpired ? "Reactivate Plan" : "Renew Now"}
+                </button>
+                {current.status === "active" && (
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelling}
+                    className="px-4 py-2.5 bg-white/15 border border-white/25 text-white text-sm font-medium rounded-xl hover:bg-white/25 transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    {cancelling ? "Cancelling…" : "Cancel Plan"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Expiry warning */}
+            {renewalInfo?.isExpiringSoon && !renewalInfo.isExpired && current.status === "active" && (
+              <div className="mt-4 flex items-center gap-2 text-white/90 text-xs font-medium">
+                <Clock size={13} /> Your plan renews in {renewalInfo.remaining} day{renewalInfo.remaining === 1 ? "" : "s"} — renew now to avoid interruption.
+              </div>
+            )}
+            {renewalInfo?.isExpired && (
+              <div className="mt-4 flex items-center gap-2 text-white/90 text-xs font-medium">
+                <AlertCircle size={13} /> Your subscription has expired. Renew to restore access to paid features.
+              </div>
             )}
           </div>
         )}

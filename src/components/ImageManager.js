@@ -6,19 +6,26 @@ import { uploadAPI } from "@/lib/api";
 /**
  * ImageManager — improved image CRUD for product or service.
  * Props:
- *   entityId   — UUID (null = not yet saved, shows save-first notice)
+ *   entityId   — UUID (null = not yet saved → use staging mode if onStage provided)
  *   type       — "product" | "service"
  *   images     — initial array {id, url, is_primary}
- *   onChange   — called with updated images array
+ *   onChange   — called with updated images array (uploaded)
+ *   onStage    — optional. If set, when entityId is null images are kept in
+ *                local staging state instead of showing the "save first" notice.
+ *                Receives the current array of staged File objects.
+ *   stagedFiles — optional. Controlled staged files array (for parent control).
  */
-export default function ImageManager({ entityId, type = "product", images: initial = [], onChange }) {
+export default function ImageManager({ entityId, type = "product", images: initial = [], onChange, onStage, stagedFiles: stagedFromProp }) {
   const [images, setImages]       = useState(initial);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress]   = useState([]); // pending file previews
+  const [progress, setProgress]   = useState([]); // pending file previews (during upload)
   const [deleting, setDeleting]   = useState(null);
   const [setting, setSetting]     = useState(null);
   const [drag, setDrag]           = useState(false);
+  // Staged files (when entity not yet created)
+  const [staged, setStaged]       = useState([]); // [{ file, localUrl, primary }]
   const fileRef = useRef();
+  const stagingMode = !entityId && typeof onStage === "function";
 
   useEffect(() => { setImages(initial); }, [JSON.stringify(initial)]);
 
@@ -26,8 +33,26 @@ export default function ImageManager({ entityId, type = "product", images: initi
 
   // ── Upload (multiple files at once) ───────────────────────────────────────
   const handleFiles = useCallback(async (files) => {
-    if (!entityId || !files?.length) return;
+    if (!files?.length) return;
     const arr = Array.from(files);
+
+    // Staging mode (no entityId yet) — keep local previews, hand off to parent
+    if (stagingMode) {
+      const newStaged = arr.map(file => ({ file, localUrl: URL.createObjectURL(file) }));
+      setStaged(prev => {
+        const merged = [...prev, ...newStaged];
+        // If this is the first batch, mark first as primary
+        if (!merged.some(s => s.primary)) {
+          merged[0].primary = true;
+        }
+        onStage?.(merged.map(s => s.file));
+        return merged;
+      });
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
+    if (!entityId) return;
 
     // Show local previews immediately
     const previews = arr.map(f => ({ _localUrl: URL.createObjectURL(f), _uploading: true }));
@@ -57,7 +82,26 @@ export default function ImageManager({ entityId, type = "product", images: initi
         return updated;
       });
     }
-  }, [entityId, type, onChange]);
+  }, [entityId, type, onChange, stagingMode, onStage]);
+
+  // Remove a staged file (pre-create)
+  const handleRemoveStaged = (index) => {
+    setStaged(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      // Preserve primary if removed
+      if (!next.some(s => s.primary) && next.length > 0) next[0].primary = true;
+      onStage?.(next.map(s => s.file));
+      return next;
+    });
+  };
+
+  const handleSetStagedPrimary = (index) => {
+    setStaged(prev => {
+      const next = prev.map((s, i) => ({ ...s, primary: i === index }));
+      onStage?.(next.map(s => s.file));
+      return next;
+    });
+  };
 
   // ── Drag & drop ───────────────────────────────────────────────────────────
   const onDrop = useCallback((e) => {
@@ -97,6 +141,91 @@ export default function ImageManager({ entityId, type = "product", images: initi
 
   // ── Not saved yet ─────────────────────────────────────────────────────────
   if (!entityId) {
+    if (stagingMode) {
+      // Staging mode — let user pick images now, parent uploads after create
+      return (
+        <div className="space-y-4">
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onClick={() => fileRef.current?.click()}
+            className={`relative border-2 border-dashed rounded-2xl transition-all cursor-pointer ${
+              drag
+                ? "border-primary-500 bg-primary-50/60 scale-[1.01]"
+                : "border-surface-200 bg-surface-50 hover:border-primary-300 hover:bg-primary-50/20"
+            }`}
+            style={{ minHeight: 80 }}
+          >
+            <div className="flex items-center justify-center gap-3 py-5 px-4">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${drag ? "bg-primary-100" : "bg-surface-100"}`}>
+                <Upload size={16} className={drag ? "text-primary-600" : "text-surface-400"} />
+              </div>
+              <div>
+                <p className={`text-sm font-semibold ${drag ? "text-primary-700" : "text-surface-600"}`}>
+                  {drag ? "Drop images here" : "Click or drag images here"}
+                </p>
+                <p className="text-xs text-surface-400 mt-0.5">PNG, JPG — they upload after you save the product</p>
+              </div>
+            </div>
+          </div>
+
+          {staged.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2.5">
+                {staged.length} image{staged.length !== 1 ? "s" : ""} pending · Click to set as main
+              </p>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {staged.map((s, i) => (
+                  <div
+                    key={i}
+                    onClick={() => handleSetStagedPrimary(i)}
+                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer group ${
+                      s.primary
+                        ? "border-primary-500 ring-2 ring-primary-200 shadow-md"
+                        : "border-amber-300 hover:border-primary-300"
+                    }`}
+                  >
+                    <img src={s.localUrl} alt="" className="w-full h-full object-cover" />
+                    {s.primary && (
+                      <div className="absolute top-1.5 left-1.5 flex items-center gap-0.5 bg-primary-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
+                        <Star size={8} className="fill-white" /> Main
+                      </div>
+                    )}
+                    <div className="absolute bottom-1.5 left-1.5 right-1.5 text-[9px] font-bold text-amber-700 bg-amber-50/95 backdrop-blur-sm rounded px-1.5 py-0.5 text-center">
+                      Pending upload
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRemoveStaged(i); }}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer border-none shadow"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
+                <ImageIcon size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  These will upload automatically when you save the product. The first / starred image becomes the main thumbnail.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => handleFiles(e.target.files)}
+          />
+        </div>
+      );
+    }
+
+    // Legacy — no staging callback supplied: show the original notice
     return (
       <div className="flex flex-col items-center justify-center py-12 px-6 border-2 border-dashed border-amber-200 bg-amber-50 rounded-2xl gap-3 text-center">
         <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
@@ -104,7 +233,7 @@ export default function ImageManager({ entityId, type = "product", images: initi
         </div>
         <div>
           <p className="text-sm font-semibold text-amber-800">Save the item first</p>
-          <p className="text-xs text-amber-600 mt-1">Click "Save as Draft" to get an ID, then come back to upload images</p>
+          <p className="text-xs text-amber-600 mt-1">Click &quot;Save as Draft&quot; to get an ID, then come back to upload images</p>
         </div>
       </div>
     );

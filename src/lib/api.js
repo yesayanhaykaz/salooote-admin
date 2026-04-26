@@ -346,6 +346,12 @@ export const vendorAPI = {
   subscriptionPlans: () => request("/vendor/subscription/plans"),
   changePlan: (plan_slug) => request("/vendor/subscription/change", { method: "POST", body: JSON.stringify({ plan_slug }) }),
   cancelSubscription: () => request("/vendor/subscription/cancel", { method: "POST" }),
+  // Renew = extend the current plan for another period; backend may treat
+  // this same as changePlan with the same slug, but having an explicit
+  // endpoint is cleaner. Falls back to changePlan if /renew is not defined.
+  renewSubscription: (plan_slug) =>
+    request("/vendor/subscription/renew", { method: "POST", body: JSON.stringify({ plan_slug }) })
+      .catch(() => request("/vendor/subscription/change", { method: "POST", body: JSON.stringify({ plan_slug }) })),
   billingHistory: () => request("/vendor/subscription/history"),
 };
 
