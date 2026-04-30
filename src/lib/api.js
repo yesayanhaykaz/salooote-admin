@@ -202,6 +202,7 @@ export const adminCategoriesAPI = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  getTranslations: (id) => request(`/admin/categories/${id}/translations`),
 };
 
 // Public - Vendors (for admin display)

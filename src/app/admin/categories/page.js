@@ -120,6 +120,20 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!initial?.id) return;
+    adminCategoriesAPI.getTranslations(initial.id)
+      .then(res => {
+        const list = res.data || res || [];
+        const mapped = { hy: { name: "", slug: "", description: "" }, ru: { name: "", slug: "", description: "" } };
+        list.forEach(t => {
+          if (mapped[t.locale]) mapped[t.locale] = { name: t.name || "", slug: t.slug || "", description: t.description || "" };
+        });
+        setTrans(mapped);
+      })
+      .catch(() => {});
+  }, [initial?.id]);
+
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setT = (locale, k, v) => setTrans(p => ({ ...p, [locale]: { ...p[locale], [k]: v } }));
 
@@ -164,7 +178,7 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
       if (catId) {
         for (const locale of ["hy", "ru"]) {
           const t = trans[locale];
-          if (t.name.trim()) {
+          if (t.name.trim() || t.description.trim()) {
             await adminCategoriesAPI.upsertTranslation(catId, {
               locale,
               name:        t.name,
