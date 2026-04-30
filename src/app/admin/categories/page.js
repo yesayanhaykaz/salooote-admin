@@ -330,6 +330,7 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editCat, setEditCat] = useState(null);
+  const [showOnlyTopLevel, setShowOnlyTopLevel] = useState(false);
 
   const fetchCategories = () => {
     adminCategoriesAPI.list()
@@ -357,6 +358,10 @@ export default function CategoriesPage() {
       setCategories(prev => prev.filter(c => c.id !== id));
     } catch (e) { console.error(e); }
   };
+
+  const displayedCategories = showOnlyTopLevel
+    ? categories.filter(c => !c.parent_id)
+    : categories;
 
   const handleToggleVisible = async (cat) => {
     const newVal = !cat.is_visible;
@@ -456,10 +461,22 @@ export default function CategoriesPage() {
         <TopBar
           title="Categories"
           actions={
-            <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-primary-600 text-sm font-semibold text-white hover:bg-primary-700 transition-colors cursor-pointer border-0">
-              <Plus size={14} /> Add Category
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowOnlyTopLevel(v => !v)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition-colors cursor-pointer ${
+                  showOnlyTopLevel
+                    ? "bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100"
+                    : "bg-white text-surface-600 border-surface-200 hover:bg-surface-50"
+                }`}
+              >
+                {showOnlyTopLevel ? "Top-level only" : "All categories"}
+              </button>
+              <button onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-primary-600 text-sm font-semibold text-white hover:bg-primary-700 transition-colors cursor-pointer border-0">
+                <Plus size={14} /> Add Category
+              </button>
+            </div>
           }
         />
 
@@ -470,7 +487,7 @@ export default function CategoriesPage() {
             <>
               {/* Grid cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-                {categories.map(cat => (
+                {displayedCategories.map(cat => (
                   <div key={cat.id} className="bg-white rounded-xl border-2 border-surface-100 overflow-hidden hover:shadow-card transition-shadow group relative">
                     {/* Image or emoji header */}
                     {cat.image_url ? (
@@ -527,7 +544,7 @@ export default function CategoriesPage() {
               {/* Table */}
               <div>
                 <h2 className="text-sm font-bold text-surface-700 mb-3">All Categories</h2>
-                <DataTable columns={tableColumns} data={categories} searchKeys={["name", "slug"]} pageSize={10} />
+                <DataTable columns={tableColumns} data={displayedCategories} searchKeys={["name", "slug"]} pageSize={10} />
               </div>
             </>
           )}
