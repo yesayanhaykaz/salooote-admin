@@ -110,29 +110,18 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
     image_url:   initial?.image_url   || "",
   });
 
-  // Translations (hy, ru)
-  const [trans, setTrans] = useState({
-    hy: { name: "", slug: "", description: "" },
-    ru: { name: "", slug: "", description: "" },
+  // Translations (hy, ru) — populated from the category's translations array
+  const [trans, setTrans] = useState(() => {
+    const mapped = { hy: { name: "", slug: "", description: "" }, ru: { name: "", slug: "", description: "" } };
+    (initial?.translations || []).forEach(t => {
+      if (mapped[t.locale]) mapped[t.locale] = { name: t.name || "", slug: t.slug || "", description: t.description || "" };
+    });
+    return mapped;
   });
 
   const [activeLocale, setActiveLocale] = useState("en");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!initial?.id) return;
-    adminCategoriesAPI.getTranslations(initial.id)
-      .then(res => {
-        const list = Array.isArray(res.data) ? res.data : Array.isArray(res) ? res : [];
-        const mapped = { hy: { name: "", slug: "", description: "" }, ru: { name: "", slug: "", description: "" } };
-        list.forEach(t => {
-          if (mapped[t.locale]) mapped[t.locale] = { name: t.name || "", slug: t.slug || "", description: t.description || "" };
-        });
-        setTrans(mapped);
-      })
-      .catch(() => {});
-  }, [initial?.id]);
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setT = (locale, k, v) => setTrans(p => ({ ...p, [locale]: { ...p[locale], [k]: v } }));
