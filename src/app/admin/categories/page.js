@@ -124,7 +124,7 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
     if (!initial?.id) return;
     adminCategoriesAPI.getTranslations(initial.id)
       .then(res => {
-        const list = res.data || res || [];
+        const list = Array.isArray(res.data) ? res.data : Array.isArray(res) ? res : [];
         const mapped = { hy: { name: "", slug: "", description: "" }, ru: { name: "", slug: "", description: "" } };
         list.forEach(t => {
           if (mapped[t.locale]) mapped[t.locale] = { name: t.name || "", slug: t.slug || "", description: t.description || "" };
@@ -182,7 +182,7 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
             await adminCategoriesAPI.upsertTranslation(catId, {
               locale,
               name:        t.name,
-              slug:        t.slug || slugify(t.name),
+              slug:        t.slug || form.slug,
               description: t.description,
             });
           }
