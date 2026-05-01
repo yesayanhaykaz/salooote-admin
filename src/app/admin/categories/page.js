@@ -168,7 +168,7 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
         color:       form.color_hex,
         is_active:   form.status === "active",
         ...(form.parent_id ? { parent_id: form.parent_id } : {}),
-        ...(imageUrl       ? { image_url: imageUrl }       : {}),
+        image_url: imageUrl || "",
       };
 
       const saved = await onSave(payload, initial?.id);
@@ -275,7 +275,7 @@ function CategoryModal({ onClose, onSave, parentOptions, initial }) {
                 </div>
               </div>
 
-              <ImageUploadZone image={form.image || form.image_url} onImage={img => setF("image", img)} />
+              <ImageUploadZone image={form.image || form.image_url} onImage={img => { setF("image", img); if (!img) setF("image_url", ""); }} />
             </>
           )}
 
