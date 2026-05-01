@@ -1,14 +1,80 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   UserPlus, Eye, Star, X, MessageSquare, Pencil,
   ShieldOff, MapPin, Package, DollarSign, Calendar, BadgeCheck, Tag, Link2,
+  ImageIcon, Plus, Trash2,
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import CategoryPicker from "@/components/CategoryPicker";
-import { adminVendorsAPI, aiAPI } from "@/lib/api";
+import { adminVendorsAPI, uploadAPI, aiAPI } from "@/lib/api";
 
 const STATUS_TABS = ["All", "Active", "Pending", "Suspended"];
+
+// ─── Single image upload zone ─────────────────────────────────────────────────
+function SingleImageUpload({ label, image, imageUrl, onImage, onClear, aspectClass = "h-28" }) {
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const preview = image instanceof File ? URL.createObjectURL(image) : imageUrl;
+  const handleFile = (file) => { if (file?.type.startsWith("image/")) onImage(file); };
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-surface-700 mb-1.5">{label}</label>
+      {preview ? (
+        <div className={`relative w-full ${aspectClass} rounded-xl overflow-hidden border border-surface-200`}>
+          <img src={preview} alt="" className="w-full h-full object-cover" />
+          <button onClick={onClear} className="absolute top-2 right-2 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer border-0">
+            <X size={12} />
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+          className={`w-full ${aspectClass} rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${dragging ? "border-primary-400 bg-primary-50" : "border-surface-200 bg-surface-50 hover:border-primary-300 hover:bg-primary-50/40"}`}
+        >
+          <ImageIcon size={20} className="text-surface-300" />
+          <p className="text-xs text-surface-400">Click or drag to upload</p>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
+    </div>
+  );
+}
+
+// ─── Gallery manager ──────────────────────────────────────────────────────────
+function GalleryManager({ items, onAdd, onRemove }) {
+  const inputRef = useRef(null);
+  const handleFile = (file) => { if (file?.type.startsWith("image/")) onAdd(file); };
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-surface-700 mb-2">Gallery Images</label>
+      <div className="grid grid-cols-3 gap-2">
+        {items.map((item, i) => (
+          <div key={item.id || i} className="relative aspect-square rounded-xl overflow-hidden border border-surface-200 group">
+            <img src={item.preview || item.url} alt="" className="w-full h-full object-cover" />
+            <button
+              onClick={() => onRemove(i)}
+              className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer border-0"
+            >
+              <X size={10} />
+            </button>
+          </div>
+        ))}
+        <div
+          onClick={() => inputRef.current?.click()}
+          className="aspect-square rounded-xl border-2 border-dashed border-surface-200 bg-surface-50 hover:border-primary-300 hover:bg-primary-50/40 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+        >
+          <Plus size={16} className="text-surface-300" />
+          <p className="text-[10px] text-surface-400">Add</p>
+        </div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files[0])} />
+    </div>
+  );
+}
 
 // ─── Standalone field component (must be outside modal to prevent remount on each keystroke) ──
 function VendorField({ label, name, value, onChange, type = "text", placeholder, required }) {
@@ -199,6 +265,20 @@ function VendorModal({ onClose, onSave, initial, prefill }) {
     address:       prefill?.address || "",
     status: "active",
   });
+
+  // Image state (edit only)
+  const [logoFile, setLogoFile]           = useState(null);
+  const [logoUrl, setLogoUrl]             = useState(initial?.logo_url || "");
+  const [bannerFile, setBannerFile]       = useState(null);
+  const [bannerUrl, setBannerUrl]         = useState(initial?.banner_url || "");
+  const [ownerFile, setOwnerFile]         = useState(null);
+  const [ownerUrl, setOwnerUrl]           = useState(initial?.owner_photo_url || "");
+  // gallery: array of { id?, url, file? (if new), preview? }
+  const [gallery, setGallery] = useState(() => {
+    try { return JSON.parse(initial?.gallery_images || "[]").map(g => ({ id: g.id, url: g.url })); }
+    catch { return []; }
+  });
+
   const [categoryIds, setCategoryIds] = useState([]);
   const [catLoading, setCatLoading]   = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -216,6 +296,14 @@ function VendorModal({ onClose, onSave, initial, prefill }) {
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setField = (name, val) => set(name, val);
 
+  const uploadIfFile = async (file, existingUrl) => {
+    if (file instanceof File) {
+      const res = await uploadAPI.image(file, "admin");
+      return res.data?.url || existingUrl;
+    }
+    return existingUrl;
+  };
+
   const handleSubmit = async () => {
     if (!isEdit && (!form.first_name?.trim() || !form.email?.trim() || !form.password?.trim() || !form.business_name?.trim())) {
       setError("First name, email, password and business name are required.");
@@ -230,8 +318,39 @@ function VendorModal({ onClose, onSave, initial, prefill }) {
     setSaving(true);
     setError("");
     try {
-      const saved = await onSave(form);
-      // After save, update categories (edit mode — use vendor id; create mode — use returned vendor id)
+      // Upload any new images first
+      let finalLogo    = logoUrl;
+      let finalBanner  = bannerUrl;
+      let finalOwner   = ownerUrl;
+      let finalGallery = gallery;
+
+      if (isEdit) {
+        [finalLogo, finalBanner, finalOwner] = await Promise.all([
+          uploadIfFile(logoFile, logoUrl),
+          uploadIfFile(bannerFile, bannerUrl),
+          uploadIfFile(ownerFile, ownerUrl),
+        ]);
+        // Upload any new gallery items
+        finalGallery = await Promise.all(gallery.map(async (item) => {
+          if (item.file instanceof File) {
+            const res = await uploadAPI.image(item.file, "admin");
+            return { id: item.id || crypto.randomUUID(), url: res.data?.url || item.url };
+          }
+          return { id: item.id, url: item.url };
+        }));
+      }
+
+      const payload = {
+        ...form,
+        ...(isEdit ? {
+          logo_url:        finalLogo,
+          banner_url:      finalBanner,
+          owner_photo_url: finalOwner,
+          gallery_images:  finalGallery,
+        } : {}),
+      };
+
+      const saved = await onSave(payload);
       const vendorId = saved?.id || initial?.id;
       if (vendorId) {
         await adminVendorsAPI.setCategories(vendorId, categoryIds);
@@ -244,12 +363,9 @@ function VendorModal({ onClose, onSave, initial, prefill }) {
     }
   };
 
-  // Use the top-level VendorField component (avoids remount on each keystroke)
-
-  const SECTIONS = [
-    { key: "info",       label: "Info" },
-    { key: "categories", label: "Categories", icon: Tag },
-  ];
+  const SECTIONS = isEdit
+    ? [{ key: "info", label: "Info" }, { key: "images", label: "Images", icon: ImageIcon }, { key: "categories", label: "Categories", icon: Tag }]
+    : [{ key: "info", label: "Info" }];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -341,6 +457,43 @@ function VendorModal({ onClose, onSave, initial, prefill }) {
                 </select>
               </div>
             </>
+          )}
+
+          {/* ── Images section ── */}
+          {activeSection === "images" && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <SingleImageUpload
+                  label="Logo / Icon"
+                  image={logoFile}
+                  imageUrl={logoUrl}
+                  onImage={(f) => setLogoFile(f)}
+                  onClear={() => { setLogoFile(null); setLogoUrl(""); }}
+                  aspectClass="h-28"
+                />
+                <SingleImageUpload
+                  label="Owner Photo"
+                  image={ownerFile}
+                  imageUrl={ownerUrl}
+                  onImage={(f) => setOwnerFile(f)}
+                  onClear={() => { setOwnerFile(null); setOwnerUrl(""); }}
+                  aspectClass="h-28"
+                />
+              </div>
+              <SingleImageUpload
+                label="Banner / Cover Image"
+                image={bannerFile}
+                imageUrl={bannerUrl}
+                onImage={(f) => setBannerFile(f)}
+                onClear={() => { setBannerFile(null); setBannerUrl(""); }}
+                aspectClass="h-36"
+              />
+              <GalleryManager
+                items={gallery}
+                onAdd={(file) => setGallery(prev => [...prev, { file, preview: URL.createObjectURL(file) }])}
+                onRemove={(i) => setGallery(prev => prev.filter((_, idx) => idx !== i))}
+              />
+            </div>
           )}
 
           {/* ── Categories section ── */}
