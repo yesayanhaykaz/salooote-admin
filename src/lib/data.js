@@ -6,6 +6,7 @@ export const ADMIN_NAV = [
   { label: "Bookings",       key: "sidebar.bookings",      href: "/admin/bookings",          icon: "CalendarCheck" },
   { label: "Products",       key: "sidebar.products",      href: "/admin/products",          icon: "Package" },
   { label: "Categories",     key: "sidebar.categories",    href: "/admin/categories",        icon: "Tag" },
+  { label: "Event Planner",                                 href: "/admin/planner",           icon: "CalendarDays" },
   { label: "Subscriptions",  key: "sidebar.subscription",  href: "/admin/subscriptions",     icon: "CreditCard" },
   { label: "Payments",       key: "sidebar.payments",      href: "/admin/payments",          icon: "DollarSign" },
   { label: "Reviews",        key: "sidebar.reviews",       href: "/admin/reviews",           icon: "Star" },

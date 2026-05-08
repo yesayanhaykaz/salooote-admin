@@ -205,6 +205,27 @@ export const adminCategoriesAPI = {
   getTranslations: (id) => request(`/admin/categories/${id}/translations`),
 };
 
+// Admin - Planner event types + checklist items
+export const adminPlannerAPI = {
+  // Event types
+  listEventTypes: () => request("/admin/planner/event-types"),
+  createEventType: (data) =>
+    request("/admin/planner/event-types", { method: "POST", body: JSON.stringify(data) }),
+  updateEventType: (id, data) =>
+    request(`/admin/planner/event-types/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteEventType: (id) =>
+    request(`/admin/planner/event-types/${id}`, { method: "DELETE" }),
+  // Checklist items
+  getChecklist: (eventTypeId) =>
+    request(`/admin/planner/event-types/${eventTypeId}/checklist`),
+  createChecklistItem: (eventTypeId, data) =>
+    request(`/admin/planner/event-types/${eventTypeId}/checklist`, { method: "POST", body: JSON.stringify(data) }),
+  updateChecklistItem: (itemId, data) =>
+    request(`/admin/planner/checklist/${itemId}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteChecklistItem: (itemId) =>
+    request(`/admin/planner/checklist/${itemId}`, { method: "DELETE" }),
+};
+
 // Public - Vendors (for admin display)
 export const vendorsAPI = {
   list: (params = {}) => {
