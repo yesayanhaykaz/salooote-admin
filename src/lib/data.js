@@ -37,7 +37,6 @@ export const VENDOR_NAV = [
 export const USER_NAV = [
   { label: "Dashboard",    href: "/user",                  icon: "LayoutDashboard" },
   { label: "My Events",    href: "/user/events",           icon: "Calendar" },
-  { label: "Inquiries",    href: "/user/inquiries",        icon: "Inbox" },
   { label: "Saved",        href: "/user/saved",            icon: "Heart" },
   { label: "Messages",     href: "/user/messages",         icon: "MessageSquare" },
   { label: "Orders",       href: "/user/orders",           icon: "ShoppingBag" },

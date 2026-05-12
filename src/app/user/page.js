@@ -1,8 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import {
-  Calendar, Heart, MessageSquare, CheckCircle,
-  Star, Bell, ChevronRight, Package, ShoppingBag, Clock,
+  Heart, Star, Bell, ChevronRight, Package, ShoppingBag,
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import StatsCard from "@/components/StatsCard";
@@ -54,7 +53,6 @@ function shortId(id) {
 export default function UserDashboard() {
   const [user, setUser]           = useState(null);
   const [orders, setOrders]       = useState([]);
-  const [inquiries, setInquiries] = useState([]);
   const [notifs, setNotifs]       = useState([]);
   const [saved, setSaved]         = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -63,16 +61,14 @@ export default function UserDashboard() {
     Promise.allSettled([
       authAPI.me(),
       userAPI.orders({ limit: 3 }),
-      userAPI.inquiries({ limit: 3 }),
       userAPI.notifications({ limit: 5 }),
       userAPI.saved({ limit: 1 }),
-    ]).then(([uRes, oRes, iRes, nRes, sRes]) => {
+    ]).then(([uRes, oRes, nRes, sRes]) => {
       if (uRes.status === "fulfilled") {
         const d = uRes.value?.data || uRes.value;
         setUser(d);
       }
       if (oRes.status === "fulfilled") setOrders(oRes.value?.data || []);
-      if (iRes.status === "fulfilled") setInquiries(iRes.value?.data || []);
       if (nRes.status === "fulfilled") setNotifs(nRes.value?.data || []);
       // For saved count we need a separate call with pagination meta
       if (sRes.status === "fulfilled") {
@@ -114,13 +110,6 @@ export default function UserDashboard() {
             icon={Heart}
             iconBg="bg-pink-50"
             iconColor="text-pink-500"
-          />
-          <StatsCard
-            label="Active Inquiries"
-            value={inquiries.filter(i => !["cancelled", "closed", "completed"].includes(i.status)).length}
-            icon={MessageSquare}
-            iconBg="bg-blue-50"
-            iconColor="text-blue-500"
           />
           <StatsCard
             label="Notifications"
@@ -182,52 +171,6 @@ export default function UserDashboard() {
               )}
             </div>
 
-            {/* Recent Inquiries */}
-            <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-surface-100 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-surface-900">Recent Inquiries</h2>
-                <Link href="/user/inquiries" className="text-xs text-primary-600 font-medium hover:underline flex items-center gap-1">
-                  View all <ChevronRight size={12} />
-                </Link>
-              </div>
-              {inquiries.length === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-surface-400">
-                  No inquiries yet.{" "}
-                  <Link href="/user/inquiries" className="text-primary-600 font-medium">Send one</Link>
-                </div>
-              ) : (
-                <div className="divide-y divide-surface-50">
-                  {inquiries.map(inq => {
-                    const status = inq.status?.toLowerCase() || "new";
-                    const badgeCls = {
-                      new:       "badge badge-info",
-                      replied:   "badge badge-purple",
-                      confirmed: "badge badge-success",
-                      cancelled: "badge badge-danger",
-                      closed:    "badge badge-gray",
-                    }[status] || "badge badge-gray";
-                    return (
-                      <div key={inq.id} className="px-5 py-4 flex items-center gap-4">
-                        <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                          <MessageSquare size={15} className="text-blue-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-surface-900 truncate">
-                            {inq.subject || "(No subject)"}
-                          </p>
-                          <p className="text-xs text-surface-400 truncate">
-                            Vendor: {inq.vendor_id?.slice(-8) || "—"}
-                          </p>
-                        </div>
-                        <span className={badgeCls}>{inq.status || "new"}</span>
-                        <span className="text-xs text-surface-400 flex-shrink-0">{timeAgo(inq.created_at)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
           </div>
 
           {/* Right — Recent Activity (Notifications) */}
@@ -279,7 +222,6 @@ export default function UserDashboard() {
                 {[
                   { href: "/user/saved",        label: "My Saved Items",    icon: Heart,          color: "text-pink-500",   bg: "bg-pink-50" },
                   { href: "/user/orders",        label: "My Orders",         icon: ShoppingBag,    color: "text-violet-500", bg: "bg-violet-50" },
-                  { href: "/user/inquiries",     label: "My Inquiries",      icon: MessageSquare,  color: "text-blue-500",   bg: "bg-blue-50" },
                   { href: "/user/reviews",       label: "My Reviews",        icon: Star,           color: "text-yellow-500", bg: "bg-yellow-50" },
                   { href: "/user/notifications", label: "Notifications",     icon: Bell,           color: "text-surface-500", bg: "bg-surface-100" },
                 ].map(link => (
