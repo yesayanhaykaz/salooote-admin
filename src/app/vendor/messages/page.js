@@ -69,6 +69,9 @@ export default function VendorMessages() {
     if (ws.conversation_id === selectedIdRef.current) {
       setMessages(prev => [...prev, msg]);
     }
+
+    // Refresh TopBar notification bell
+    window.dispatchEvent(new Event("notif-refresh"));
   }, []);
 
   const handleTyping = useCallback((ws) => {
@@ -132,7 +135,7 @@ export default function VendorMessages() {
 
   const filtered = clientConvs.filter(c => {
     if (!search.trim()) return true;
-    const name = (c.other_user?.first_name || "").toLowerCase();
+    const name = [c.other_user?.first_name, c.other_user?.last_name].filter(Boolean).join(" ").toLowerCase();
     const last = (c.last_message || "").toLowerCase();
     return name.includes(search.toLowerCase()) || last.includes(search.toLowerCase());
   });
@@ -212,7 +215,7 @@ export default function VendorMessages() {
                 <p className="text-sm text-surface-400">No client messages yet</p>
               </div>
             ) : filtered.map(conv => {
-              const name   = conv.other_user?.first_name || "Client";
+              const name   = [conv.other_user?.first_name, conv.other_user?.last_name].filter(Boolean).join(" ") || "Client";
               const color  = colorFor(name);
               const active = selectedId === conv.id;
               return (
@@ -254,7 +257,7 @@ export default function VendorMessages() {
             <>
               {/* Header */}
               {(() => {
-                const name  = selected.other_user?.first_name || "Client";
+                const name  = [selected.other_user?.first_name, selected.other_user?.last_name].filter(Boolean).join(" ") || "Client";
                 const color = colorFor(name);
                 return (
                   <div className="px-5 py-3.5 border-b border-surface-100 flex items-center gap-3">

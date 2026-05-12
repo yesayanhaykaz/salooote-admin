@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Bell, Check, X, Inbox, CalendarCheck, Star, MessageSquare } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useLocale, LANGUAGES } from "@/lib/i18n";
@@ -65,22 +65,41 @@ export default function TopBar({ title, subtitle, actions }) {
   const [notifFilter, setNotifFilter] = useState("all");
   const panelRef = useRef(null);
 
-  // Fetch on mount — admin gets ALL platform notifications, vendor gets own only
+  // Keep stable refs so the event listener / interval don't go stale
+  const notifAPIRef     = useRef(notifAPI);
+  const isVendorRef     = useRef(isVendorPortal);
   useEffect(() => {
-    notifAPI.notifications({ limit: 30 })
+    notifAPIRef.current  = notifAPI;
+    isVendorRef.current  = isVendorPortal;
+  }, [notifAPI, isVendorPortal]);
+
+  const fetchNotifs = useCallback(() => {
+    notifAPIRef.current.notifications({ limit: 30 })
       .then(res => {
         const list = res?.data || [];
-
-        // Vendors: only show message-type notifications from clients (not admin-initiated)
-        const filtered = isVendorPortal
+        const filtered = isVendorRef.current
           ? list.filter(n => n.type !== "message" || n.from_role === "user" || !n.from_role)
           : list;
-
         setNotifs(filtered);
         setReadSet(new Set(filtered.filter(n => n.is_read).map(n => n.id)));
       })
       .catch(() => {});
-  }, [pathname]);
+  }, []);
+
+  // Fetch on mount / route change
+  useEffect(() => { fetchNotifs(); }, [pathname]);
+
+  // Poll every 30s to pick up order/booking/message notifications
+  useEffect(() => {
+    const id = setInterval(fetchNotifs, 30_000);
+    return () => clearInterval(id);
+  }, [fetchNotifs]);
+
+  // Instant refresh when messages page fires "notif-refresh"
+  useEffect(() => {
+    window.addEventListener("notif-refresh", fetchNotifs);
+    return () => window.removeEventListener("notif-refresh", fetchNotifs);
+  }, [fetchNotifs]);
 
   // Close panel on outside click
   useEffect(() => {

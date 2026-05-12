@@ -69,6 +69,8 @@ export default function AdminMessages() {
     if (ws.conversation_id === selectedIdRef.current) {
       setMessages(prev => [...prev, msg]);
     }
+
+    window.dispatchEvent(new Event("notif-refresh"));
   }, []);
 
   const handleTyping = useCallback((ws) => {
@@ -136,7 +138,7 @@ export default function AdminMessages() {
 
   const filtered = conversations.filter(c => {
     if (!search.trim()) return true;
-    const name = c.other_user?.first_name || "";
+    const name = [c.other_user?.first_name, c.other_user?.last_name].filter(Boolean).join(" ");
     const last = c.last_message || "";
     return name.toLowerCase().includes(search.toLowerCase())
         || last.toLowerCase().includes(search.toLowerCase());
@@ -221,7 +223,7 @@ export default function AdminMessages() {
               </div>
             ) : filtered.map(conv => {
               const other  = conv.other_user || {};
-              const name   = other.first_name || "Unknown";
+              const name   = [other.first_name, other.last_name].filter(Boolean).join(" ") || "Unknown";
               const color  = colorFor(name);
               const active = selectedId === conv.id;
               return (
@@ -267,7 +269,7 @@ export default function AdminMessages() {
               <div className="bg-white border-b border-surface-200 px-6 py-4 flex items-center gap-3 flex-shrink-0">
                 {(() => {
                   const other = selected.other_user || {};
-                  const name  = other.first_name || "Unknown";
+                  const name  = [other.first_name, other.last_name].filter(Boolean).join(" ") || "Unknown";
                   const color = colorFor(name);
                   return (
                     <>
