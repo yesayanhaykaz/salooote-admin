@@ -377,6 +377,33 @@ export const vendorAPI = {
   billingHistory: () => request("/vendor/subscription/history"),
 };
 
+// Admin - Notifications inbox (/user/notifications works for any authenticated role)
+export const adminNotificationsAPI = {
+  notifications: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/user/notifications${q ? "?" + q : ""}`);
+  },
+  markNotifRead: (id) => request(`/user/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotifsRead: () => request("/user/notifications/read-all", { method: "POST" }),
+};
+
+// Chat API — shared across all roles (backend filters by JWT user ID)
+// Endpoints: /conversations, /conversations/:id/messages (no role prefix)
+export const chatAPI = {
+  conversations: () => request("/conversations"),
+  startConversation: (vendor_id) =>
+    request("/conversations", { method: "POST", body: JSON.stringify({ vendor_id }) }),
+  messages: (id, params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/conversations/${id}/messages${q ? "?" + q : ""}`);
+  },
+  sendMessage: (id, body, attachment_url = "") =>
+    request(`/conversations/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body, ...(attachment_url ? { attachment_url } : {}) }),
+    }),
+};
+
 // AI Chat
 export const aiAPI = {
   vendorChat: (messages) =>

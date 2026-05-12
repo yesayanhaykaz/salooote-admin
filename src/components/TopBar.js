@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Search, Bell, Check, X, Inbox, CalendarCheck, Star } from "lucide-react";
+import { Search, Bell, Check, X, Inbox, CalendarCheck, Star, MessageSquare } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useLocale, LANGUAGES } from "@/lib/i18n";
-import { vendorAPI } from "@/lib/api";
+import { vendorAPI, adminNotificationsAPI } from "@/lib/api";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -27,23 +28,35 @@ const NOTIF_STYLE = {
   review:       "bg-warning-50 text-warning-600",
   subscription: "bg-orange-50 text-orange-500",
   payment:      "bg-success-50 text-success-600",
+  message:      "bg-blue-50 text-blue-600",
   system:       "bg-surface-100 text-surface-500",
   info:         "bg-blue-50 text-blue-600",
   success:      "bg-success-50 text-success-600",
   warning:      "bg-warning-50 text-warning-600",
   danger:       "bg-danger-50 text-danger-600",
+  user:         "bg-purple-50 text-purple-600",
+  vendor:       "bg-teal-50 text-teal-600",
 };
 
 const NOTIF_ICON = {
-  inquiry: Inbox,
-  booking: CalendarCheck,
-  review:  Star,
+  inquiry:  Inbox,
+  booking:  CalendarCheck,
+  review:   Star,
+  message:  MessageSquare,
 };
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
 
 export default function TopBar({ title, subtitle, actions }) {
   const { locale, setLocale, t } = useLocale();
+  const pathname = usePathname() || "";
+
+  const isAdminPortal  = pathname.startsWith("/admin");
+  const isVendorPortal = pathname.startsWith("/vendor");
+
+  // Choose correct API + "view all" link based on portal
+  const notifAPI = isAdminPortal ? adminNotificationsAPI : vendorAPI;
+  const notifViewAllLink = isAdminPortal ? "/admin/notifications" : "/vendor/notifications";
 
   // Notifications state
   const [notifOpen,   setNotifOpen]   = useState(false);
@@ -52,16 +65,22 @@ export default function TopBar({ title, subtitle, actions }) {
   const [notifFilter, setNotifFilter] = useState("all");
   const panelRef = useRef(null);
 
-  // Fetch on mount
+  // Fetch on mount — admin gets ALL platform notifications, vendor gets own only
   useEffect(() => {
-    vendorAPI.notifications({ limit: 30 })
+    notifAPI.notifications({ limit: 30 })
       .then(res => {
         const list = res?.data || [];
-        setNotifs(list);
-        setReadSet(new Set(list.filter(n => n.is_read).map(n => n.id)));
+
+        // Vendors: only show message-type notifications from clients (not admin-initiated)
+        const filtered = isVendorPortal
+          ? list.filter(n => n.type !== "message" || n.from_role === "user" || !n.from_role)
+          : list;
+
+        setNotifs(filtered);
+        setReadSet(new Set(filtered.filter(n => n.is_read).map(n => n.id)));
       })
       .catch(() => {});
-  }, []);
+  }, [pathname]);
 
   // Close panel on outside click
   useEffect(() => {
@@ -82,12 +101,12 @@ export default function TopBar({ title, subtitle, actions }) {
   const markRead = async (id) => {
     if (readSet.has(id)) return;
     setReadSet(prev => new Set([...prev, id]));
-    try { await vendorAPI.markNotifRead(id); } catch {}
+    try { await notifAPI.markNotifRead(id); } catch {}
   };
 
   const markAllRead = async () => {
     try {
-      await vendorAPI.markAllNotifsRead();
+      await notifAPI.markAllNotifsRead();
       setReadSet(new Set(notifs.map(n => n.id)));
     } catch {}
   };
@@ -245,7 +264,7 @@ export default function TopBar({ title, subtitle, actions }) {
             {/* Footer */}
             <div className="px-4 py-2.5 border-t border-surface-100 bg-surface-50/60 text-center">
               <a
-                href="/vendor/notifications"
+                href={notifViewAllLink}
                 className="text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors"
               >
                 {t("notifications.view_all")}

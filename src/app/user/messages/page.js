@@ -1,278 +1,507 @@
 "use client";
-import { useState, useEffect } from "react";
-import { MessageSquare, Plus, X, Clock, Send } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Search, Send, MessageSquare, Plus, X, Wifi, WifiOff,
+} from "lucide-react";
 import TopBar from "@/components/TopBar";
-import { userAPI } from "@/lib/api";
+import { chatAPI, publicAPI } from "@/lib/api";
+import { getUser } from "@/lib/auth";
+import { useChat } from "@/lib/useChat";
 
-const STATUS_MAP = {
-  new:       { label: "New",       cls: "badge badge-info" },
-  replied:   { label: "Replied",   cls: "badge badge-purple" },
-  confirmed: { label: "Confirmed", cls: "badge badge-success" },
-  cancelled: { label: "Cancelled", cls: "badge badge-danger" },
-  closed:    { label: "Closed",    cls: "badge badge-gray" },
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const TABS = ["All", "New", "Replied", "Confirmed", "Cancelled", "Closed"];
+const COLORS = [
+  "bg-pink-500", "bg-blue-500", "bg-purple-500",
+  "bg-green-500", "bg-orange-500", "bg-teal-500", "bg-red-500", "bg-indigo-500",
+];
 
-function formatDate(iso) {
-  if (!iso) return "—";
+function colorFor(str = "") {
+  let h = 0;
+  for (const c of str) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return COLORS[h % COLORS.length];
+}
+
+function initials(name = "") {
+  return name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+
+function timeAgo(iso) {
+  if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
-  const hours = diff / 3600000;
-  if (hours < 1)  return `${Math.floor(diff / 60000)}m ago`;
-  if (hours < 24) return `${Math.floor(hours)}h ago`;
-  if (hours < 48) return "Yesterday";
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return "Yesterday";
+  if (d < 7) return `${d}d ago`;
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function shortId(id) {
-  return id ? id.slice(-6).toUpperCase() : "—";
-}
+// ─── New Chat Modal ───────────────────────────────────────────────────────────
 
-function NewInquiryModal({ onClose, onCreated }) {
-  const [form, setForm] = useState({
-    vendor_id: "", subject: "", message: "",
-    event_type: "", event_date: "", guest_count: "", budget: "", currency: "USD",
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  function handleChange(e) {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    setError("");
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!form.vendor_id.trim()) { setError("Vendor ID is required."); return; }
-    if (!form.subject.trim())   { setError("Subject is required."); return; }
-    if (!form.message.trim())   { setError("Message is required."); return; }
-
-    setSaving(true);
-    try {
-      const payload = {
-        vendor_id: form.vendor_id.trim(),
-        subject: form.subject.trim(),
-        message: form.message.trim(),
-      };
-      if (form.event_type)  payload.event_type  = form.event_type;
-      if (form.event_date)  payload.event_date  = form.event_date;
-      if (form.guest_count) payload.guest_count = parseInt(form.guest_count);
-      if (form.budget)      payload.budget       = parseFloat(form.budget);
-      if (form.budget)      payload.currency     = form.currency;
-
-      const res = await userAPI.createInquiry(payload);
-      onCreated(res?.data || res);
-    } catch (err) {
-      setError(err.message || "Failed to send inquiry.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-surface-200 flex items-center justify-between sticky top-0 bg-white z-10">
-          <h2 className="text-sm font-bold text-surface-900">New Inquiry</h2>
-          <button onClick={onClose} className="w-7 h-7 rounded-full hover:bg-surface-100 flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent">
-            <X size={15} className="text-surface-500" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Vendor ID *</label>
-            <input name="vendor_id" value={form.vendor_id} onChange={handleChange} placeholder="Paste vendor UUID" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Subject *</label>
-            <input name="subject" value={form.subject} onChange={handleChange} placeholder="What is this about?" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-surface-700 mb-1.5">Message *</label>
-            <textarea name="message" value={form.message} onChange={handleChange} rows={3} placeholder="Describe what you need…" className="w-full resize-none px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Event Type</label>
-              <input name="event_type" value={form.event_type} onChange={handleChange} placeholder="Wedding, Birthday…" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Event Date</label>
-              <input type="date" name="event_date" value={form.event_date} onChange={handleChange} className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Guest Count</label>
-              <input type="number" name="guest_count" value={form.guest_count} onChange={handleChange} placeholder="e.g. 100" className="w-full px-3.5 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-surface-700 mb-1.5">Budget</label>
-              <div className="flex gap-2">
-                <input type="number" name="budget" value={form.budget} onChange={handleChange} placeholder="500" className="flex-1 px-3 py-2.5 text-sm border border-surface-200 rounded-lg outline-none focus:border-primary-600 transition-colors" />
-                <select name="currency" value={form.currency} onChange={handleChange} className="px-2 py-2.5 text-sm border border-surface-200 rounded-lg outline-none bg-white focus:border-primary-600">
-                  <option value="USD">USD</option>
-                  <option value="AMD">AMD</option>
-                  <option value="EUR">EUR</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-xs text-danger-600 bg-danger-50 border border-danger-200 rounded-lg px-3 py-2">{error}</p>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 text-sm font-medium text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors cursor-pointer bg-white">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none disabled:opacity-60">
-              <Send size={14} /> {saving ? "Sending…" : "Send Inquiry"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export default function UserMessages() {
-  const [inquiries, setInquiries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("All");
-  const [showModal, setShowModal] = useState(false);
+function NewChatModal({ onClose, onStarted }) {
+  const [vendors,  setVendors]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [query,    setQuery]    = useState("");
+  const [starting, setStarting] = useState(null); // vendor id being started
+  const [error,    setError]    = useState("");
 
   useEffect(() => {
-    userAPI.inquiries({ limit: 50 })
-      .then(res => setInquiries(res?.data || []))
+    publicAPI.vendors({ limit: 50 })
+      .then(res => setVendors(res?.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = activeTab === "All"
-    ? inquiries
-    : inquiries.filter(i => i.status?.toLowerCase() === activeTab.toLowerCase());
+  const filteredVendors = vendors.filter(v => {
+    if (!query.trim()) return true;
+    const name = (v.business_name || v.name || "").toLowerCase();
+    return name.includes(query.toLowerCase());
+  });
 
-  function handleCreated(newInquiry) {
-    if (newInquiry?.id) setInquiries(prev => [newInquiry, ...prev]);
-    setShowModal(false);
-  }
+  const handleStart = async (vendorId) => {
+    setStarting(vendorId);
+    setError("");
+    try {
+      const res = await chatAPI.startConversation(vendorId);
+      const conv = res?.data || res;
+      if (conv?.id) {
+        onStarted(conv);
+      }
+    } catch (e) {
+      setError(e.message || "Could not start conversation. Try again.");
+    } finally {
+      setStarting(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
-      <TopBar
-        title="Messages"
-        subtitle="Your inquiries to vendors"
-        actions={
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-surface-900">New Conversation</h2>
           <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+            onClick={onClose}
+            className="w-7 h-7 rounded-full hover:bg-surface-100 flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent"
           >
-            <Plus size={13} /> New Message
+            <X size={14} className="text-surface-500" />
           </button>
-        }
-      />
+        </div>
 
-      <main className="flex-1 p-6 space-y-5">
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-white border border-surface-200 rounded-xl px-2 py-1.5 overflow-x-auto w-fit">
-          {TABS.map(tab => {
-            const count = tab === "All" ? inquiries.length : inquiries.filter(i => i.status?.toLowerCase() === tab.toLowerCase()).length;
+        <div className="p-4 border-b border-surface-100">
+          <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 gap-2 focus-within:border-primary-400 transition-colors">
+            <Search size={13} className="text-surface-400" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search vendors…"
+              autoFocus
+              className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="py-8 text-center text-sm text-surface-400">Loading vendors…</div>
+          ) : filteredVendors.length === 0 ? (
+            <div className="py-8 text-center text-sm text-surface-400">No vendors found</div>
+          ) : filteredVendors.map(v => {
+            const name  = v.business_name || v.name || "Vendor";
+            const color = colorFor(name);
+            const busy  = starting === v.id;
             return (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer border-none ${
-                  activeTab === tab ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100 bg-transparent"
-                }`}
+                key={v.id}
+                onClick={() => handleStart(v.id)}
+                disabled={!!starting}
+                className="w-full flex items-center gap-3 px-4 py-3 border-b border-surface-50 hover:bg-surface-50 transition-colors cursor-pointer border-none bg-transparent text-left disabled:opacity-60"
               >
-                {tab}
-                {count > 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === tab ? "bg-white/20 text-white" : "bg-surface-100 text-surface-500"}`}>
-                    {count}
-                  </span>
+                {v.logo_url ? (
+                  <img src={v.logo_url} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center flex-shrink-0`}>
+                    <span className="text-white text-sm font-bold">{initials(name)}</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-surface-800 truncate">{name}</p>
+                  {v.category_name && (
+                    <p className="text-xs text-surface-400 truncate">{v.category_name}</p>
+                  )}
+                </div>
+                {busy ? (
+                  <span className="text-xs text-primary-600 font-medium">Starting…</span>
+                ) : (
+                  <MessageSquare size={14} className="text-surface-400 flex-shrink-0" />
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-20 text-sm text-surface-400">Loading…</div>
-        )}
-
-        {/* Empty */}
-        {!loading && filtered.length === 0 && (
-          <div className="bg-white rounded-xl border border-surface-200 flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-3">
-              <MessageSquare size={24} className="text-blue-300" />
-            </div>
-            <p className="text-sm font-semibold text-surface-600">No messages yet</p>
-            <p className="text-xs text-surface-400 mt-1 mb-4">
-              {activeTab === "All" ? "Send an inquiry to a vendor to start a conversation." : `No ${activeTab.toLowerCase()} inquiries.`}
-            </p>
-            {activeTab === "All" && (
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
-              >
-                <Plus size={13} /> Send First Inquiry
-              </button>
-            )}
+        {error && (
+          <div className="px-4 py-2 border-t border-surface-100">
+            <p className="text-xs text-danger-600">{error}</p>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Inquiry Cards */}
-        {!loading && filtered.length > 0 && (
-          <div className="space-y-3">
-            {filtered.map(inq => {
-              const statusInfo = STATUS_MAP[inq.status?.toLowerCase()] || { label: inq.status || "—", cls: "badge badge-gray" };
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function UserMessages() {
+  const myId = getUser()?.id;
+
+  const [conversations, setConversations] = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [selectedId,    setSelectedId]    = useState(null);
+  const [messages,      setMessages]      = useState([]);
+  const [msgLoading,    setMsgLoading]    = useState(false);
+  const [input,         setInput]         = useState("");
+  const [search,        setSearch]        = useState("");
+  const [typing,        setTyping]        = useState(false);
+  const [showModal,     setShowModal]     = useState(false);
+  const typingTimer = useRef(null);
+  const bottomRef   = useRef(null);
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+
+  const handleNewMessage = useCallback((ws) => {
+    const msg = ws.message;
+    if (!msg) return;
+
+    setConversations(prev => {
+      const exists = prev.find(c => c.id === ws.conversation_id);
+      if (exists) {
+        return prev.map(c =>
+          c.id === ws.conversation_id
+            ? { ...c, last_message: msg.body, last_message_at: msg.created_at,
+                unread_count: c.id === selectedIdRef.current ? 0 : (c.unread_count || 0) + 1 }
+            : c
+        );
+      }
+      // New conversation arrived — re-fetch list
+      chatAPI.conversations().then(res => setConversations(res?.data || [])).catch(() => {});
+      return prev;
+    });
+
+    if (ws.conversation_id === selectedIdRef.current) {
+      setMessages(prev => [...prev, msg]);
+    }
+  }, []);
+
+  const handleTyping = useCallback((ws) => {
+    if (ws.conversation_id !== selectedIdRef.current || ws.user_id === myId) return;
+    setTyping(true);
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => setTyping(false), 3000);
+  }, [myId]);
+
+  const { connected, sendMessage: wsSend, sendTyping, sendRead } = useChat({
+    onNewMessage: handleNewMessage,
+    onTyping:     handleTyping,
+  });
+
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  // ── Load conversations ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    chatAPI.conversations()
+      .then(res => setConversations(res?.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // ── Load messages ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!selectedId) { setMessages([]); return; }
+    setMsgLoading(true);
+    setTyping(false);
+
+    chatAPI.messages(selectedId, { limit: 50 })
+      .then(res => setMessages((res?.data || []).slice().reverse()))
+      .catch(() => setMessages([]))
+      .finally(() => setMsgLoading(false));
+
+    sendRead(selectedId);
+    setConversations(prev => prev.map(c =>
+      c.id === selectedId ? { ...c, unread_count: 0 } : c
+    ));
+  }, [selectedId, sendRead]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
+
+  const selected = conversations.find(c => c.id === selectedId);
+  const totalUnread = conversations.reduce((s, c) => s + (c.unread_count || 0), 0);
+
+  const filtered = conversations.filter(c => {
+    if (!search.trim()) return true;
+    const name = (c.other_user?.first_name || "").toLowerCase();
+    const last = (c.last_message || "").toLowerCase();
+    return name.includes(search.toLowerCase()) || last.includes(search.toLowerCase());
+  });
+
+  // ── Send ──────────────────────────────────────────────────────────────────
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim();
+    if (!text || !selectedId) return;
+    setInput("");
+
+    const optimistic = {
+      id:              `tmp_${Date.now()}`,
+      conversation_id: selectedId,
+      sender_id:       myId,
+      body:            text,
+      created_at:      new Date().toISOString(),
+      sender:          { id: myId, first_name: "Me" },
+    };
+    setMessages(prev => [...prev, optimistic]);
+    setConversations(prev => prev.map(c =>
+      c.id === selectedId ? { ...c, last_message: text } : c
+    ));
+
+    const sentViaWS = wsSend(selectedId, text);
+    if (!sentViaWS) {
+      try { await chatAPI.sendMessage(selectedId, text); } catch {}
+    }
+  }, [input, selectedId, myId, wsSend]);
+
+  const handleInputChange = useCallback((e) => {
+    setInput(e.target.value);
+    if (selectedId) sendTyping(selectedId);
+  }, [selectedId, sendTyping]);
+
+  // When a new conversation is started from modal
+  const handleConversationStarted = useCallback((conv) => {
+    setShowModal(false);
+    setConversations(prev => {
+      const exists = prev.find(c => c.id === conv.id);
+      return exists ? prev : [conv, ...prev];
+    });
+    setSelectedId(conv.id);
+  }, []);
+
+  // ─── UI ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex flex-col flex-1 min-h-screen bg-surface-50">
+      <TopBar
+        title="Messages"
+        subtitle={totalUnread > 0 ? `${totalUnread} unread` : "Your vendor conversations"}
+        actions={
+          <div className="flex items-center gap-3">
+            <span className={`flex items-center gap-1 text-[11px] font-medium ${connected ? "text-success-600" : "text-surface-400"}`}>
+              {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
+              {connected ? "Live" : "Connecting…"}
+            </span>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+            >
+              <Plus size={13} /> New Chat
+            </button>
+          </div>
+        }
+      />
+
+      <div className="flex flex-1 overflow-hidden m-6 bg-white rounded-xl border border-surface-200">
+        {/* ── Conversation List ──────────────────────────────────────────── */}
+        <div className="w-72 border-r border-surface-100 flex flex-col flex-shrink-0">
+
+          <div className="p-4 border-b border-surface-100">
+            <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 gap-2 focus-within:border-primary-400 transition-colors">
+              <Search size={13} className="text-surface-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search conversations…"
+                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="py-12 text-center text-sm text-surface-400">Loading…</div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 px-6 text-center">
+                <MessageSquare size={24} className="text-surface-300" />
+                <p className="text-sm text-surface-400">No conversations yet</p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+                >
+                  <Plus size={12} /> Start a Chat
+                </button>
+              </div>
+            ) : filtered.map(conv => {
+              const name   = conv.other_user?.first_name || "Vendor";
+              const color  = colorFor(name);
+              const active = selectedId === conv.id;
               return (
-                <div key={inq.id} className="bg-white rounded-xl border border-surface-200 p-4 hover:shadow-card transition-shadow">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-700 flex-shrink-0">
-                        {shortId(inq.vendor_id)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-surface-900">{inq.subject || "(No subject)"}</p>
-                        <p className="text-xs text-surface-400 mt-0.5">Vendor: {inq.vendor_id?.slice(-8) || "—"}</p>
-                        {inq.message && (
-                          <p className="text-xs text-surface-500 mt-1 line-clamp-2">{inq.message}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      <span className={statusInfo.cls}>{statusInfo.label}</span>
-                      <div className="flex items-center gap-1 text-[11px] text-surface-400">
-                        <Clock size={10} />
-                        {formatDate(inq.created_at)}
-                      </div>
-                    </div>
+                <button
+                  key={conv.id}
+                  onClick={() => setSelectedId(conv.id)}
+                  className={`w-full px-4 py-3.5 flex items-start gap-3 border-b border-surface-50 text-left transition-colors cursor-pointer border-none ${
+                    active ? "bg-primary-50" : "hover:bg-surface-50 bg-transparent"
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center flex-shrink-0`}>
+                    <span className="text-white text-sm font-bold">{initials(name)}</span>
                   </div>
-
-                  {/* Event details */}
-                  {(inq.event_type || inq.event_date || inq.budget) && (
-                    <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-surface-50">
-                      {inq.event_type && (
-                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Event:</span> {inq.event_type}</span>
-                      )}
-                      {inq.event_date && (
-                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Date:</span> {inq.event_date?.slice(0, 10)}</span>
-                      )}
-                      {inq.budget && (
-                        <span className="text-xs text-surface-500"><span className="font-medium text-surface-700">Budget:</span> {inq.currency || ""} {inq.budget}</span>
-                      )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className={`text-sm font-semibold truncate ${active ? "text-primary-700" : "text-surface-800"}`}>
+                        {name}
+                      </span>
+                      <span className="text-[10px] text-surface-400 flex-shrink-0 ml-1">
+                        {timeAgo(conv.last_message_at || conv.updated_at)}
+                      </span>
                     </div>
+                    <p className="text-xs text-surface-400 truncate">{conv.last_message || "No messages yet"}</p>
+                  </div>
+                  {conv.unread_count > 0 && (
+                    <span className="min-w-[18px] h-[18px] bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 px-1">
+                      {conv.unread_count}
+                    </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
-        )}
-      </main>
+        </div>
 
-      {showModal && <NewInquiryModal onClose={() => setShowModal(false)} onCreated={handleCreated} />}
+        {/* ── Chat Area ─────────────────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {selected ? (
+            <>
+              {/* Header */}
+              {(() => {
+                const name  = selected.other_user?.first_name || "Vendor";
+                const email = selected.other_user?.email || "";
+                const color = colorFor(name);
+                return (
+                  <div className="px-5 py-3.5 border-b border-surface-100 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full ${color} flex items-center justify-center`}>
+                      <span className="text-white text-sm font-bold">{initials(name)}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-surface-900">{name}</p>
+                      {email && <p className="text-xs text-surface-400">{email}</p>}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                {msgLoading ? (
+                  <div className="flex justify-center py-10 text-sm text-surface-400">Loading messages…</div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <p className="text-sm text-surface-400">Say hello! 👋</p>
+                  </div>
+                ) : messages.map((msg, i) => {
+                  const isMine = msg.sender_id === myId;
+                  const color  = colorFor(msg.sender?.first_name || "");
+                  return (
+                    <div key={msg.id || i} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                      {!isMine && (
+                        <div className={`w-7 h-7 rounded-full ${color} flex items-center justify-center flex-shrink-0 mr-2 mt-0.5`}>
+                          <span className="text-[10px] font-bold text-white">{initials(msg.sender?.first_name || "")}</span>
+                        </div>
+                      )}
+                      <div className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        isMine
+                          ? "bg-primary-600 text-white rounded-br-sm"
+                          : "bg-surface-100 text-surface-800 rounded-bl-sm"
+                      }`}>
+                        <p className="whitespace-pre-wrap break-words">{msg.body}</p>
+                        <p className={`text-[10px] mt-1 ${isMine ? "text-primary-200" : "text-surface-400"}`}>
+                          {timeAgo(msg.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Typing indicator */}
+                {typing && (
+                  <div className="flex justify-start">
+                    <div className="bg-surface-100 rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-1">
+                      {[0, 1, 2].map(i => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 bg-surface-400 rounded-full animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+
+              {/* Input */}
+              <div className="px-5 py-4 border-t border-surface-100">
+                <div className="flex items-center gap-3 bg-surface-50 rounded-xl border border-surface-200 px-4 py-2.5 focus-within:border-primary-400 transition-colors">
+                  <input
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
+                    placeholder="Type a message…"
+                    className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400"
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim()}
+                    className="w-8 h-8 bg-primary-600 text-white rounded-lg flex items-center justify-center hover:bg-primary-700 transition-colors cursor-pointer border-none flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Send size={14} />
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
+              <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center">
+                <MessageSquare size={28} className="text-primary-300" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-surface-700">Chat with vendors</p>
+                <p className="text-xs text-surface-400 mt-1">
+                  Select a conversation or start a new one to message a vendor directly.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1.5 text-sm font-semibold bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors cursor-pointer border-none"
+              >
+                <Plus size={14} /> Start a Chat
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showModal && (
+        <NewChatModal
+          onClose={() => setShowModal(false)}
+          onStarted={handleConversationStarted}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ export const ADMIN_NAV = [
   { label: "Subscriptions",  key: "sidebar.subscription",  href: "/admin/subscriptions",     icon: "CreditCard" },
   { label: "Payments",       key: "sidebar.payments",      href: "/admin/payments",          icon: "DollarSign" },
   { label: "Reviews",        key: "sidebar.reviews",       href: "/admin/reviews",           icon: "Star" },
+  { label: "Messages",        key: "sidebar.messages",      href: "/admin/messages",          icon: "MessageSquare" },
   { label: "Support",        key: "sidebar.support",       href: "/admin/support",           icon: "Headphones" },
   { label: "Marketing",      key: "sidebar.marketing",     href: "/admin/marketing",         icon: "Megaphone" },
   { label: "Notifications",  key: "sidebar.notifications", href: "/admin/notifications",     icon: "Bell" },
