@@ -1,10 +1,21 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import AiChat from "@/components/AiChat";
 import { VENDOR_NAV } from "@/lib/data";
 import { isLoggedIn, getRole, getUser } from "@/lib/auth";
+import { useChat } from "@/lib/useChat";
+
+// Fires "notif-refresh" whenever any new message arrives — keeps the bell
+// updated on every vendor page, not just when the messages page is open.
+function VendorNotifSync() {
+  const handleNewMessage = useCallback(() => {
+    window.dispatchEvent(new Event("notif-refresh"));
+  }, []);
+  useChat({ onNewMessage: handleNewMessage });
+  return null;
+}
 
 export default function VendorLayout({ children }) {
   const router = useRouter();
@@ -46,6 +57,7 @@ export default function VendorLayout({ children }) {
         {children}
       </div>
       <AiChat role="vendor" />
+      <VendorNotifSync />
     </div>
   );
 }

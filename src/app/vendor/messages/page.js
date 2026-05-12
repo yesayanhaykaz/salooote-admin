@@ -69,9 +69,6 @@ export default function VendorMessages() {
     if (ws.conversation_id === selectedIdRef.current) {
       setMessages(prev => [...prev, msg]);
     }
-
-    // Refresh TopBar notification bell
-    window.dispatchEvent(new Event("notif-refresh"));
   }, []);
 
   const handleTyping = useCallback((ws) => {
