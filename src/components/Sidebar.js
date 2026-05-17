@@ -6,8 +6,7 @@ import {
   Package, Tag, BarChart2, MessageSquare, FileText,
   Settings, Sparkles, CreditCard, Bell, LogOut,
   ClipboardCheck, CalendarCheck, CalendarDays, DollarSign,
-  Star, Headphones, Megaphone, Shield, Inbox, Heart,
-  ClipboardList, Briefcase,
+  Star, Headphones, Megaphone, Shield, Inbox, Briefcase,
 } from "lucide-react";
 import { clearTokens } from "@/lib/auth";
 import { authAPI } from "@/lib/api";
@@ -18,8 +17,7 @@ const ICONS = {
   Package, Tag, BarChart2, MessageSquare, FileText,
   Settings, Sparkles, CreditCard, Bell, Briefcase,
   ClipboardCheck, CalendarCheck, CalendarDays, DollarSign,
-  Star, Headphones, Megaphone, Shield, Inbox, Heart,
-  ClipboardList,
+  Star, Headphones, Megaphone, Shield, Inbox,
 };
 
 export default function Sidebar({ nav, role, userName = "Admin User", userEmail = "admin@salooote.am" }) {
@@ -30,7 +28,6 @@ export default function Sidebar({ nav, role, userName = "Admin User", userEmail 
   const roleConfig = {
     admin:  { labelKey: "brand.admin_title",  color: "bg-primary-600" },
     vendor: { labelKey: "brand.vendor_portal", color: "bg-violet-600" },
-    user:   { labelKey: "brand.name",          color: "bg-blue-600" },
   };
   const config = roleConfig[role] || roleConfig.admin;
 
@@ -60,7 +57,7 @@ export default function Sidebar({ nav, role, userName = "Admin User", userEmail 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {nav.map((item) => {
           const Icon = ICONS[item.icon] || Package;
-          const isActive = pathname === item.href || (item.href !== "/admin" && item.href !== "/vendor" && item.href !== "/user" && pathname.startsWith(item.href));
+          const isActive = pathname === item.href || (item.href !== "/admin" && item.href !== "/vendor" && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}

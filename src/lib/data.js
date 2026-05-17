@@ -34,17 +34,6 @@ export const VENDOR_NAV = [
   { label: "Settings",      key: "sidebar.settings",      href: "/vendor/settings",      icon: "Settings" },
 ];
 
-export const USER_NAV = [
-  { label: "Dashboard",    href: "/user",                  icon: "LayoutDashboard" },
-  { label: "My Events",    href: "/user/events",           icon: "Calendar" },
-  { label: "Saved",        href: "/user/saved",            icon: "Heart" },
-  { label: "Messages",     href: "/user/messages",         icon: "MessageSquare" },
-  { label: "Orders",       href: "/user/orders",           icon: "ShoppingBag" },
-  { label: "Reviews",      href: "/user/reviews",          icon: "Star" },
-  { label: "Planner",      href: "/user/planner",          icon: "ClipboardList" },
-  { label: "Notifications",href: "/user/notifications",    icon: "Bell" },
-  { label: "Settings",     href: "/user/settings",         icon: "Settings" },
-];
 
 export const SAMPLE_USERS     = [];
 export const SAMPLE_VENDORS   = [];

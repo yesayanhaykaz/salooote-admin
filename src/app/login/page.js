@@ -27,7 +27,7 @@ export default function LoginPage() {
       const role = res.data.user.role;
       if (role === "admin") router.push("/admin");
       else if (role === "vendor") router.push("/vendor");
-      else router.push("/user");
+      else setError("Access denied. This portal is for admins and vendors only.");
     } catch (err) {
       setError(err.message || "Invalid email or password");
     } finally {
@@ -173,13 +173,6 @@ export default function LoginPage() {
             <p>{t("demo.vendor")}: vendor@salooote.am / Vendor@123</p>
           </div>
 
-          {/* Client portal link */}
-          <p className="text-center text-xs text-surface-400 mt-4">
-            Regular user?{" "}
-            <a href="/user/login" className="text-primary-600 font-semibold hover:text-primary-700">
-              Go to client login →
-            </a>
-          </p>
         </div>
       </div>
     </div>
