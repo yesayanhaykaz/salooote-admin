@@ -105,7 +105,27 @@ function getInitialTrans(translations, locale) {
     name:              t.name              || "",
     description:       t.description       || "",
     short_description: t.short_description || t.short_desc || "",
+    slug:              t.slug              || "",
+    seo_title:         t.seo_title         || t.meta_title || "",
+    seo_description:   t.seo_description   || t.meta_description || "",
+    image_alt:         t.image_alt         || "",
   };
+}
+
+function pickFirst(...values) {
+  return values.find(v => v !== undefined && v !== null && v !== "") || "";
+}
+
+function formatArrayInput(value) {
+  return Array.isArray(value) ? value.join(", ") : "";
+}
+
+function parseArrayInput(value) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean);
 }
 
 /* ─── Full-page product editor ───────────────────────────────────────────── */
@@ -131,6 +151,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     name:              initial?.name              || "",
     description:       initial?.description       || "",
     short_description: initial?.short_description || "",
+    slug:              pickFirst(initial?.slug_en, initial?.slug),
     // multi-category: prefer category_ids array, fall back to category_id
     category_ids:      initial?.category_ids?.map(id => String(id)) ||
                        (initial?.category_id ? [String(initial.category_id)] : []),
@@ -139,14 +160,33 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     currency:          initial?.currency          || "AMD",
     sku:               initial?.sku               || "",
     stock:             initial?.stock_qty ?? initial?.stock ?? "",
-    tags:              (initial?.tags || []).join(", "),
+    tags:              formatArrayInput(initial?.tags),
+    for_whom:          formatArrayInput(initial?.for_whom),
+    occasions:         formatArrayInput(initial?.occasions),
+    seo_title:         pickFirst(initial?.seo_title_en, initial?.seo_title, initial?.meta_title_en, initial?.meta_title),
+    seo_description:   pickFirst(initial?.seo_description_en, initial?.seo_description, initial?.meta_description_en, initial?.meta_description),
+    image_alt:         pickFirst(initial?.image_alt_en, initial?.image_alt),
     status:            initial?.status            || "draft",
     lead_time:         leadValue,                  // numeric string
     lead_time_unit:    leadUnit,                   // "hours" | "days"
   });
+  const hyInitialTrans = getInitialTrans(initial?.translations, "hy");
+  const ruInitialTrans = getInitialTrans(initial?.translations, "ru");
   const [transForm, setTransForm] = useState({
-    hy: getInitialTrans(initial?.translations, "hy"),
-    ru: getInitialTrans(initial?.translations, "ru"),
+    hy: {
+      ...hyInitialTrans,
+      slug: pickFirst(hyInitialTrans.slug, initial?.slug_hy),
+      seo_title: pickFirst(hyInitialTrans.seo_title, initial?.seo_title_hy, initial?.meta_title_hy),
+      seo_description: pickFirst(hyInitialTrans.seo_description, initial?.seo_description_hy, initial?.meta_description_hy),
+      image_alt: pickFirst(hyInitialTrans.image_alt, initial?.image_alt_hy),
+    },
+    ru: {
+      ...ruInitialTrans,
+      slug: pickFirst(ruInitialTrans.slug, initial?.slug_ru),
+      seo_title: pickFirst(ruInitialTrans.seo_title, initial?.seo_title_ru, initial?.meta_title_ru),
+      seo_description: pickFirst(ruInitialTrans.seo_description, initial?.seo_description_ru, initial?.meta_description_ru),
+      image_alt: pickFirst(ruInitialTrans.image_alt, initial?.image_alt_ru),
+    },
   });
 
   const set = (k, v) => { setSaved(false); setForm(f => ({ ...f, [k]: v })); };
@@ -164,12 +204,38 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       name:              form.name.trim(),
       description:       form.description,
       short_description: form.short_description,
+      slug:              form.slug.trim() || undefined,
+      slug_en:           form.slug.trim() || undefined,
       price:             parseFloat(form.price) || 0,
       currency:          form.currency || "AMD",
       sku:               form.sku,
       stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
       status:            status || form.status,
-      tags:              form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+      tags:              parseArrayInput(form.tags),
+      for_whom:          parseArrayInput(form.for_whom),
+      occasions:         parseArrayInput(form.occasions),
+      seo_title:         form.seo_title.trim() || undefined,
+      seo_title_en:      form.seo_title.trim() || undefined,
+      seo_description:   form.seo_description.trim() || undefined,
+      seo_description_en: form.seo_description.trim() || undefined,
+      meta_title:        form.seo_title.trim() || undefined,
+      meta_title_en:     form.seo_title.trim() || undefined,
+      meta_description:  form.seo_description.trim() || undefined,
+      meta_description_en: form.seo_description.trim() || undefined,
+      image_alt:         form.image_alt.trim() || undefined,
+      image_alt_en:      form.image_alt.trim() || undefined,
+      slug_hy:           transForm.hy.slug.trim() || undefined,
+      slug_ru:           transForm.ru.slug.trim() || undefined,
+      seo_title_hy:      transForm.hy.seo_title.trim() || undefined,
+      seo_title_ru:      transForm.ru.seo_title.trim() || undefined,
+      seo_description_hy: transForm.hy.seo_description.trim() || undefined,
+      seo_description_ru: transForm.ru.seo_description.trim() || undefined,
+      meta_title_hy:     transForm.hy.seo_title.trim() || undefined,
+      meta_title_ru:     transForm.ru.seo_title.trim() || undefined,
+      meta_description_hy: transForm.hy.seo_description.trim() || undefined,
+      meta_description_ru: transForm.ru.seo_description.trim() || undefined,
+      image_alt_hy:      transForm.hy.image_alt.trim() || undefined,
+      image_alt_ru:      transForm.ru.image_alt.trim() || undefined,
       // Lead time — send under both names for backward compat with backend
       ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
       ...(form.category_ids.length > 0 ? {
@@ -198,7 +264,10 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
         // Save translations
         await Promise.all(
           ["hy", "ru"]
-            .filter(loc => transForm[loc].name || transForm[loc].description || transForm[loc].short_description)
+            .filter(loc => {
+              const tr = transForm[loc];
+              return tr.name || tr.description || tr.short_description || tr.slug || tr.seo_title || tr.seo_description || tr.image_alt;
+            })
             .map(loc =>
               vendorAPI.upsertProductTranslation(pid, loc, { ...transForm[loc] }).catch(() => {})
             )
@@ -304,6 +373,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
             {activeLang === "en" && (
               <>
                 <Inp label={t("products.product_name")} required placeholder={t("products.name_placeholder")} value={form.name} onChange={e => set("name", e.target.value)} />
+                <Inp label="Slug (EN)" placeholder="english-product-slug" value={form.slug} onChange={e => set("slug", e.target.value)} />
                 <div>
                   <label className="block text-xs font-semibold text-surface-700 mb-1.5">{t("common.description")}</label>
                   <RichTextEditor value={form.description} onChange={v => set("description", v)} placeholder={t("products.desc_placeholder")} minHeight={110} />
@@ -319,6 +389,12 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
                   placeholder={activeLang === "hy" ? "Ապրանքի անվանում հայերեն" : "Название товара на русском"}
                   value={currentTrans.name}
                   onChange={e => setTrans(activeLang, "name", e.target.value)}
+                />
+                <Inp
+                  label={`Slug (${activeLang.toUpperCase()})`}
+                  placeholder={activeLang === "hy" ? "slug-hayeren" : "slug-na-russkom"}
+                  value={currentTrans.slug}
+                  onChange={e => setTrans(activeLang, "slug", e.target.value)}
                 />
                 <div>
                   <label className="block text-xs font-semibold text-surface-700 mb-1.5">
@@ -459,6 +535,79 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
               />
               <p className="text-[11px] text-surface-400 mt-1">{t("products.tags_hint")}</p>
             </div>
+          </Section>
+
+          <Section title="Audience & SEO" icon={Tag} defaultOpen>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Inp
+                label="For whom"
+                placeholder="bride, groom, kids, women"
+                value={form.for_whom}
+                onChange={e => set("for_whom", e.target.value)}
+              />
+              <Inp
+                label="Occasions"
+                placeholder="wedding, birthday, engagement"
+                value={form.occasions}
+                onChange={e => set("occasions", e.target.value)}
+              />
+            </div>
+
+            {activeLang === "en" && (
+              <>
+                <Inp
+                  label="SEO title (EN)"
+                  placeholder="Search result title"
+                  value={form.seo_title}
+                  onChange={e => set("seo_title", e.target.value)}
+                />
+                <div>
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">SEO description (EN)</label>
+                  <textarea
+                    value={form.seo_description}
+                    onChange={e => set("seo_description", e.target.value)}
+                    rows={4}
+                    placeholder="Search result description"
+                    className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all resize-y"
+                  />
+                </div>
+                <Inp
+                  label="Image alt (EN)"
+                  placeholder="Short accessible image description"
+                  value={form.image_alt}
+                  onChange={e => set("image_alt", e.target.value)}
+                />
+              </>
+            )}
+
+            {activeLang !== "en" && currentTrans && (
+              <>
+                <Inp
+                  label={`SEO title (${activeLang.toUpperCase()})`}
+                  placeholder={activeLang === "hy" ? "SEO վերնագիր" : "SEO заголовок"}
+                  value={currentTrans.seo_title}
+                  onChange={e => setTrans(activeLang, "seo_title", e.target.value)}
+                />
+                <div>
+                  <label className="block text-xs font-semibold text-surface-700 mb-1.5">
+                    SEO description ({activeLang.toUpperCase()})
+                  </label>
+                  <textarea
+                    value={currentTrans.seo_description}
+                    onChange={e => setTrans(activeLang, "seo_description", e.target.value)}
+                    rows={4}
+                    placeholder={activeLang === "hy" ? "SEO նկարագրություն" : "SEO описание"}
+                    className="w-full px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 placeholder:text-surface-400 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all resize-y"
+                  />
+                </div>
+                <Inp
+                  label={`Image alt (${activeLang.toUpperCase()})`}
+                  placeholder={activeLang === "hy" ? "Պատկերի alt տեքստ" : "Alt текст изображения"}
+                  value={currentTrans.image_alt}
+                  onChange={e => setTrans(activeLang, "image_alt", e.target.value)}
+                />
+              </>
+            )}
           </Section>
 
           <Section title={t("products.section_pricing")} icon={DollarSign} defaultOpen>

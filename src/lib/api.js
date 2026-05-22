@@ -177,6 +177,13 @@ export const adminProductsAPI = {
   delete: (id) => request(`/admin/products/${id}`, { method: "DELETE" }),
 };
 
+// Admin - AI Content Review
+export const adminAIReviewAPI = {
+  list: () => request("/admin/ai/review"),
+  approve: (id) => request(`/admin/ai/review/${id}/approve`, { method: "POST" }),
+  reject: (id) => request(`/admin/ai/review/${id}/reject`, { method: "POST" }),
+};
+
 // Admin - Categories
 export const adminCategoriesAPI = {
   // Use admin endpoint so hidden categories are also returned
