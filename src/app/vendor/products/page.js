@@ -128,6 +128,49 @@ function parseArrayInput(value) {
     .filter(Boolean);
 }
 
+const FOR_WHOM_OPTIONS = ["Bride", "Groom", "Kids", "Women", "Men", "Couple", "Family", "Friends", "Guests"];
+const OCCASIONS_OPTIONS = ["Wedding", "Birthday", "Engagement", "Anniversary", "Baby Shower", "Graduation", "Valentine's Day", "New Year", "Christmas", "Corporate"];
+
+function MultiSelect({ label, options, value = [], onChange }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (opt) => {
+    const next = value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt];
+    onChange(next);
+  };
+  return (
+    <div className="relative">
+      <label className="block text-xs font-semibold text-surface-700 mb-1.5">{label}</label>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
+      >
+        <span className={value.length === 0 ? "text-surface-400" : "text-surface-800"}>
+          {value.length === 0 ? "Select…" : value.join(", ")}
+        </span>
+        <ChevronDown size={14} className={`ml-2 flex-shrink-0 text-surface-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-surface-200 rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
+          {options.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => toggle(opt)}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-surface-50 transition-colors text-left"
+            >
+              <span className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${value.includes(opt) ? "bg-primary-500 border-primary-500" : "border-surface-300"}`}>
+                {value.includes(opt) && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </span>
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Full-page product editor ───────────────────────────────────────────── */
 function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, locale = "en" }) {
   const isNew = !initial?.id;
@@ -161,8 +204,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     sku:               initial?.sku               || "",
     stock:             initial?.stock_qty ?? initial?.stock ?? "",
     tags:              formatArrayInput(initial?.tags),
-    for_whom:          formatArrayInput(initial?.for_whom),
-    occasions:         formatArrayInput(initial?.occasions),
+    for_whom:          Array.isArray(initial?.for_whom) ? initial.for_whom : [],
+    occasions:         Array.isArray(initial?.occasions) ? initial.occasions : [],
     seo_title:         pickFirst(initial?.seo_title_en, initial?.seo_title, initial?.meta_title_en, initial?.meta_title),
     seo_description:   pickFirst(initial?.seo_description_en, initial?.seo_description, initial?.meta_description_en, initial?.meta_description),
     image_alt:         pickFirst(initial?.image_alt_en, initial?.image_alt),
@@ -212,8 +255,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
       status:            status || form.status,
       tags:              parseArrayInput(form.tags),
-      for_whom:          parseArrayInput(form.for_whom),
-      occasions:         parseArrayInput(form.occasions),
+      for_whom:          form.for_whom,
+      occasions:         form.occasions,
       seo_title:         form.seo_title.trim() || undefined,
       seo_title_en:      form.seo_title.trim() || undefined,
       seo_description:   form.seo_description.trim() || undefined,
@@ -539,17 +582,17 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
 
           <Section title="Audience & SEO" icon={Tag} defaultOpen>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Inp
+              <MultiSelect
                 label="For whom"
-                placeholder="bride, groom, kids, women"
+                options={FOR_WHOM_OPTIONS}
                 value={form.for_whom}
-                onChange={e => set("for_whom", e.target.value)}
+                onChange={v => set("for_whom", v)}
               />
-              <Inp
+              <MultiSelect
                 label="Occasions"
-                placeholder="wedding, birthday, engagement"
+                options={OCCASIONS_OPTIONS}
                 value={form.occasions}
-                onChange={e => set("occasions", e.target.value)}
+                onChange={v => set("occasions", v)}
               />
             </div>
 
