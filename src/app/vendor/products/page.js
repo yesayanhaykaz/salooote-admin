@@ -128,15 +128,50 @@ function parseArrayInput(value) {
     .filter(Boolean);
 }
 
-const FOR_WHOM_OPTIONS = ["Bride", "Groom", "Kids", "Women", "Men", "Couple", "Family", "Friends", "Guests"];
-const OCCASIONS_OPTIONS = ["Wedding", "Birthday", "Engagement", "Anniversary", "Baby Shower", "Graduation", "Valentine's Day", "New Year", "Christmas", "Corporate"];
+// Keys are lowercase stable identifiers stored in the DB; labels are per-locale
+const FOR_WHOM_OPTIONS = [
+  { key: "bride",   en: "Bride",   hy: "Հարսնացու",  ru: "Невеста"   },
+  { key: "groom",   en: "Groom",   hy: "Փեսա",        ru: "Жених"     },
+  { key: "kids",    en: "Kids",    hy: "Երեխաներ",   ru: "Дети"      },
+  { key: "women",   en: "Women",   hy: "Կանայք",      ru: "Женщины"   },
+  { key: "men",     en: "Men",     hy: "Տղամարդիկ",  ru: "Мужчины"   },
+  { key: "couple",  en: "Couple",  hy: "Զույգ",       ru: "Пара"      },
+  { key: "family",  en: "Family",  hy: "Ընտանիք",    ru: "Семья"     },
+  { key: "friends", en: "Friends", hy: "Ընկերներ",   ru: "Друзья"    },
+  { key: "guests",  en: "Guests",  hy: "Հյուրեր",    ru: "Гости"     },
+];
+const OCCASIONS_OPTIONS = [
+  { key: "wedding",      en: "Wedding",       hy: "Հարսանիք",       ru: "Свадьба"        },
+  { key: "birthday",     en: "Birthday",      hy: "Ծննդյան օր",     ru: "День рождения"  },
+  { key: "engagement",   en: "Engagement",    hy: "Նշանդրեք",       ru: "Помолвка"       },
+  { key: "anniversary",  en: "Anniversary",   hy: "Տարեդարձ",       ru: "Годовщина"      },
+  { key: "baby_shower",  en: "Baby Shower",   hy: "Մկրտություն",    ru: "Детский праздник"},
+  { key: "graduation",   en: "Graduation",    hy: "Ավարտական",      ru: "Выпускной"      },
+  { key: "valentines",   en: "Valentine's Day",hy: "Սուրբ Վալենտին",ru: "День Валентина" },
+  { key: "new_year",     en: "New Year",      hy: "Ամանոր",         ru: "Новый год"      },
+  { key: "christmas",    en: "Christmas",     hy: "Սուրբ Ծնունդ",   ru: "Рождество"      },
+  { key: "corporate",    en: "Corporate",     hy: "Կորպորատիվ",     ru: "Корпоратив"     },
+];
 
-function MultiSelect({ label, options, value = [], onChange }) {
+function normalizeKeys(arr, optionsList) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(v => {
+    const lower = String(v).toLowerCase().replace(/\s+/g, "_");
+    const match = optionsList.find(o => o.key === lower || o.en.toLowerCase() === String(v).toLowerCase());
+    return match ? match.key : lower;
+  }).filter(Boolean);
+}
+
+function MultiSelect({ label, options, value = [], onChange, locale = "en" }) {
   const [open, setOpen] = useState(false);
-  const toggle = (opt) => {
-    const next = value.includes(opt) ? value.filter(v => v !== opt) : [...value, opt];
+  const getLabel = (opt) => opt[locale] || opt.en;
+  const toggle = (key) => {
+    const next = value.includes(key) ? value.filter(v => v !== key) : [...value, key];
     onChange(next);
   };
+  const displayText = value.length === 0
+    ? null
+    : value.map(k => { const o = options.find(x => x.key === k); return o ? getLabel(o) : k; }).join(", ");
   return (
     <div className="relative">
       <label className="block text-xs font-semibold text-surface-700 mb-1.5">{label}</label>
@@ -145,8 +180,8 @@ function MultiSelect({ label, options, value = [], onChange }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-3.5 py-2.5 border border-surface-200 rounded-xl text-sm bg-white text-surface-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 transition-all"
       >
-        <span className={value.length === 0 ? "text-surface-400" : "text-surface-800"}>
-          {value.length === 0 ? "Select…" : value.join(", ")}
+        <span className={!displayText ? "text-surface-400" : "text-surface-800"}>
+          {displayText || "Select…"}
         </span>
         <ChevronDown size={14} className={`ml-2 flex-shrink-0 text-surface-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -154,15 +189,15 @@ function MultiSelect({ label, options, value = [], onChange }) {
         <div className="absolute z-50 mt-1 w-full bg-white border border-surface-200 rounded-xl shadow-lg py-1 max-h-52 overflow-y-auto">
           {options.map(opt => (
             <button
-              key={opt}
+              key={opt.key}
               type="button"
-              onClick={() => toggle(opt)}
+              onClick={() => toggle(opt.key)}
               className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-surface-50 transition-colors text-left"
             >
-              <span className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${value.includes(opt) ? "bg-primary-500 border-primary-500" : "border-surface-300"}`}>
-                {value.includes(opt) && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              <span className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors ${value.includes(opt.key) ? "bg-primary-500 border-primary-500" : "border-surface-300"}`}>
+                {value.includes(opt.key) && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </span>
-              {opt}
+              {getLabel(opt)}
             </button>
           ))}
         </div>
@@ -204,8 +239,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     sku:               initial?.sku               || "",
     stock:             initial?.stock_qty ?? initial?.stock ?? "",
     tags:              formatArrayInput(initial?.tags),
-    for_whom:          Array.isArray(initial?.for_whom) ? initial.for_whom : [],
-    occasions:         Array.isArray(initial?.occasions) ? initial.occasions : [],
+    for_whom:          normalizeKeys(initial?.for_whom, FOR_WHOM_OPTIONS),
+    occasions:         normalizeKeys(initial?.occasions, OCCASIONS_OPTIONS),
     seo_title:         pickFirst(initial?.seo_title_en, initial?.seo_title, initial?.meta_title_en, initial?.meta_title),
     seo_description:   pickFirst(initial?.seo_description_en, initial?.seo_description, initial?.meta_description_en, initial?.meta_description),
     image_alt:         pickFirst(initial?.image_alt_en, initial?.image_alt),
@@ -583,16 +618,18 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
           <Section title="Audience & SEO" icon={Tag} defaultOpen>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <MultiSelect
-                label="For whom"
+                label={locale === "hy" ? "Ում համար" : locale === "ru" ? "Для кого" : "For whom"}
                 options={FOR_WHOM_OPTIONS}
                 value={form.for_whom}
                 onChange={v => set("for_whom", v)}
+                locale={locale}
               />
               <MultiSelect
-                label="Occasions"
+                label={locale === "hy" ? "Առիթ" : locale === "ru" ? "Повод" : "Occasions"}
                 options={OCCASIONS_OPTIONS}
                 value={form.occasions}
                 onChange={v => set("occasions", v)}
+                locale={locale}
               />
             </div>
 
