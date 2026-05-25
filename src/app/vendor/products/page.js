@@ -42,6 +42,7 @@ const GRADIENTS = [
 const STATUS_BADGE = {
   active:    "badge badge-success",
   out_stock: "badge badge-danger",
+  inactive:  "badge badge-danger",
   draft:     "badge badge-gray",
 };
 const LANGS = [
@@ -244,7 +245,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     seo_title:         pickFirst(initial?.seo_title_en, initial?.seo_title, initial?.meta_title_en, initial?.meta_title),
     seo_description:   pickFirst(initial?.seo_description_en, initial?.seo_description, initial?.meta_description_en, initial?.meta_description),
     image_alt:         pickFirst(initial?.image_alt_en, initial?.image_alt),
-    status:            initial?.status            || "draft",
+    status:            (initial?.status === "inactive" ? "out_stock" : initial?.status) || "draft",
     lead_time:         leadValue,                  // numeric string
     lead_time_unit:    leadUnit,                   // "hours" | "days"
   });
@@ -289,7 +290,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       currency:          form.currency || "AMD",
       sku:               form.sku,
       stock_qty:         form.stock !== "" ? parseInt(form.stock, 10) : null,
-      status:            status || form.status,
+      status:            (status || form.status) === "out_stock" ? "inactive" : (status || form.status),
       tags:              parseArrayInput(form.tags),
       for_whom:          form.for_whom,
       occasions:         form.occasions,
@@ -930,7 +931,10 @@ export default function VendorProducts() {
       const inCats = (p.category_ids || []).map(String).includes(filterCat) || String(p.category_id) === filterCat;
       if (!inCats) return false;
     }
-    if (filterStatus && p.status !== filterStatus) return false;
+    if (filterStatus) {
+      const normalized = p.status === "inactive" ? "out_stock" : p.status;
+      if (normalized !== filterStatus) return false;
+    }
     return true;
   });
 
