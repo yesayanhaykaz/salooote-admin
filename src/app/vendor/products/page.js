@@ -274,6 +274,9 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
   };
 
   const buildPayload = (status) => {
+    const normalizedCategoryIds = form.category_ids
+      .map(id => Number(id))
+      .filter(id => Number.isFinite(id));
     // Compute total hours from lead_time + unit
     const leadHours = form.lead_time !== "" && form.lead_time != null
       ? Math.max(0, Math.round(parseFloat(form.lead_time) * (form.lead_time_unit === "days" ? 24 : 1)))
@@ -287,38 +290,18 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       price:             parseFloat(form.price) || 0,
       currency:          form.currency || "AMD",
       sku:               form.sku,
-      stock_qty:         form.stock !== "" ? parseInt(form.stock) : null,
+      stock_qty:         form.stock !== "" ? parseInt(form.stock, 10) : null,
       status:            status || form.status,
       tags:              parseArrayInput(form.tags),
       for_whom:          form.for_whom,
       occasions:         form.occasions,
       seo_title:         form.seo_title.trim() || undefined,
-      seo_title_en:      form.seo_title.trim() || undefined,
       seo_description:   form.seo_description.trim() || undefined,
-      seo_description_en: form.seo_description.trim() || undefined,
-      meta_title:        form.seo_title.trim() || undefined,
-      meta_title_en:     form.seo_title.trim() || undefined,
-      meta_description:  form.seo_description.trim() || undefined,
-      meta_description_en: form.seo_description.trim() || undefined,
       image_alt:         form.image_alt.trim() || undefined,
-      image_alt_en:      form.image_alt.trim() || undefined,
-      slug_hy:           transForm.hy.slug.trim() || undefined,
-      slug_ru:           transForm.ru.slug.trim() || undefined,
-      seo_title_hy:      transForm.hy.seo_title.trim() || undefined,
-      seo_title_ru:      transForm.ru.seo_title.trim() || undefined,
-      seo_description_hy: transForm.hy.seo_description.trim() || undefined,
-      seo_description_ru: transForm.ru.seo_description.trim() || undefined,
-      meta_title_hy:     transForm.hy.seo_title.trim() || undefined,
-      meta_title_ru:     transForm.ru.seo_title.trim() || undefined,
-      meta_description_hy: transForm.hy.seo_description.trim() || undefined,
-      meta_description_ru: transForm.ru.seo_description.trim() || undefined,
-      image_alt_hy:      transForm.hy.image_alt.trim() || undefined,
-      image_alt_ru:      transForm.ru.image_alt.trim() || undefined,
       // Lead time — send under both names for backward compat with backend
       ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
-      ...(form.category_ids.length > 0 ? {
-        category_id:  form.category_ids[0],
-        category_ids: form.category_ids,
+      ...(normalizedCategoryIds.length > 0 ? {
+        category_id: normalizedCategoryIds[0],
       } : {}),
       ...(form.compare_price !== "" ? { compare_price: parseFloat(form.compare_price) } : {}),
     };
@@ -339,6 +322,13 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
         await onUpdate(pid, payload);
       }
       if (pid) {
+        await vendorAPI.setProductCategories(
+          pid,
+          form.category_ids
+            .map(id => Number(id))
+            .filter(id => Number.isFinite(id))
+        ).catch(() => {});
+
         // Save translations
         await Promise.all(
           ["hy", "ru"]
