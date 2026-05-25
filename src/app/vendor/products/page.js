@@ -311,7 +311,13 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const payload = buildPayload(statusOverride);
+      const isPublishAction = statusOverride === "active";
+      const isDraftAction = statusOverride === "draft";
+      const payload = buildPayload(
+        isPublishAction
+          ? (form.status === "out_stock" ? "out_stock" : "draft")
+          : statusOverride
+      );
       let pid = productId || initial?.id;
       const isFreshCreate = isNew && !productId;
       if (isFreshCreate) {
@@ -363,6 +369,14 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
             setImages(prev => [...prev, ...uploaded]);
           }
           setStagedFiles([]);
+        }
+
+        if (isPublishAction) {
+          await vendorAPI.publishProduct(pid);
+          set("status", "active");
+        } else if (isDraftAction && initial?.status === "active") {
+          await vendorAPI.unpublishProduct(pid).catch(() => {});
+          set("status", "draft");
         }
       }
       setSaved(true);
