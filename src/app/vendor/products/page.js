@@ -273,7 +273,7 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     setTransForm(f => ({ ...f, [locale]: { ...f[locale], [k]: v } }));
   };
 
-  const buildPayload = (status) => {
+  const buildPayload = (status, { minimal = false } = {}) => {
     const normalizedCategoryIds = form.category_ids
       .map(id => Number(id))
       .filter(id => Number.isFinite(id));
@@ -286,20 +286,21 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       description:       form.description,
       short_description: form.short_description,
       slug:              form.slug.trim() || undefined,
-      slug_en:           form.slug.trim() || undefined,
       price:             parseFloat(form.price) || 0,
       currency:          form.currency || "AMD",
       sku:               form.sku,
       stock_qty:         form.stock !== "" ? parseInt(form.stock, 10) : null,
-      status:            status || form.status,
-      tags:              parseArrayInput(form.tags),
-      for_whom:          form.for_whom,
-      occasions:         form.occasions,
-      seo_title:         form.seo_title.trim() || undefined,
-      seo_description:   form.seo_description.trim() || undefined,
-      image_alt:         form.image_alt.trim() || undefined,
-      // Lead time — send under both names for backward compat with backend
-      ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
+      ...(minimal ? {} : {
+        status:            status || form.status,
+        tags:              parseArrayInput(form.tags),
+        for_whom:          form.for_whom,
+        occasions:         form.occasions,
+        seo_title:         form.seo_title.trim() || undefined,
+        seo_description:   form.seo_description.trim() || undefined,
+        image_alt:         form.image_alt.trim() || undefined,
+        // Lead time — send under both names for backward compat with backend
+        ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
+      }),
       ...(normalizedCategoryIds.length > 0 ? {
         category_id: normalizedCategoryIds[0],
       } : {}),
@@ -311,15 +312,16 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     if (!form.name.trim()) return;
     setSaving(true);
     try {
+      let pid = productId || initial?.id;
+      const isFreshCreate = isNew && !productId;
       const isPublishAction = statusOverride === "active";
       const isDraftAction = statusOverride === "draft";
       const payload = buildPayload(
         isPublishAction
           ? (form.status === "out_stock" ? "out_stock" : "draft")
-          : statusOverride
+          : statusOverride,
+        { minimal: !isFreshCreate }
       );
-      let pid = productId || initial?.id;
-      const isFreshCreate = isNew && !productId;
       if (isFreshCreate) {
         const res = await onCreate(payload);
         pid = res?.data?.id;
