@@ -273,11 +273,10 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
     setTransForm(f => ({ ...f, [locale]: { ...f[locale], [k]: v } }));
   };
 
-  const buildPayload = (status, { minimal = false } = {}) => {
+  const buildPayload = (status) => {
     const normalizedCategoryIds = form.category_ids
       .map(id => Number(id))
       .filter(id => Number.isFinite(id));
-    // Compute total hours from lead_time + unit
     const leadHours = form.lead_time !== "" && form.lead_time != null
       ? Math.max(0, Math.round(parseFloat(form.lead_time) * (form.lead_time_unit === "days" ? 24 : 1)))
       : null;
@@ -290,17 +289,14 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       currency:          form.currency || "AMD",
       sku:               form.sku,
       stock_qty:         form.stock !== "" ? parseInt(form.stock, 10) : null,
-      ...(minimal ? {} : {
-        status:            status || form.status,
-        tags:              parseArrayInput(form.tags),
-        for_whom:          form.for_whom,
-        occasions:         form.occasions,
-        seo_title:         form.seo_title.trim() || undefined,
-        seo_description:   form.seo_description.trim() || undefined,
-        image_alt:         form.image_alt.trim() || undefined,
-        // Lead time — send under both names for backward compat with backend
-        ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
-      }),
+      status:            status || form.status,
+      tags:              parseArrayInput(form.tags),
+      for_whom:          form.for_whom,
+      occasions:         form.occasions,
+      seo_title:         form.seo_title.trim() || undefined,
+      seo_description:   form.seo_description.trim() || undefined,
+      image_alt:         form.image_alt.trim() || undefined,
+      ...(leadHours != null ? { lead_time_hours: leadHours, min_lead_time_hours: leadHours } : {}),
       ...(normalizedCategoryIds.length > 0 ? {
         category_id: normalizedCategoryIds[0],
       } : {}),
@@ -318,9 +314,8 @@ function ProductEditor({ initial, categories, onBack, onCreate, onUpdate, t, loc
       const isDraftAction = statusOverride === "draft";
       const payload = buildPayload(
         isPublishAction
-          ? (form.status === "out_stock" ? "out_stock" : "draft")
-          : statusOverride,
-        { minimal: !isFreshCreate }
+          ? (form.status === "out_stock" ? "out_stock" : form.status)
+          : statusOverride
       );
       if (isFreshCreate) {
         const res = await onCreate(payload);
