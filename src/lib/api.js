@@ -358,6 +358,45 @@ export const vendorAPI = {
     request("/vendor/subscription/renew", { method: "POST", body: JSON.stringify({ plan_slug }) })
       .catch(() => request("/vendor/subscription/change", { method: "POST", body: JSON.stringify({ plan_slug }) })),
   billingHistory: () => request("/vendor/subscription/history"),
+
+  // Reels
+  reels: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/vendor/reels${q ? "?" + q : ""}`);
+  },
+  createReel: async (formData) => {
+    const token = getToken();
+    const res = await fetch(`${BASE_URL}/vendor/reels`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload failed" }));
+      throw new Error(err.error || "Upload failed");
+    }
+    return res.json();
+  },
+  updateReel: (id, data) =>
+    request(`/vendor/reels/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  publishReel: (id) =>
+    request(`/vendor/reels/${id}/publish`, { method: "POST" }),
+  unpublishReel: (id) =>
+    request(`/vendor/reels/${id}/unpublish`, { method: "POST" }),
+  deleteReel: (id) =>
+    request(`/vendor/reels/${id}`, { method: "DELETE" }),
+};
+
+// Admin Reels
+export const adminReelsAPI = {
+  list: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/admin/reels${q ? "?" + q : ""}`);
+  },
+  setStatus: (id, status) =>
+    request(`/admin/reels/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  delete: (id) =>
+    request(`/admin/reels/${id}`, { method: "DELETE" }),
 };
 
 // Admin - Notifications inbox (/user/notifications works for any authenticated role)
