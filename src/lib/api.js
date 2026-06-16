@@ -130,6 +130,7 @@ export const adminOrdersAPI = {
     const q = new URLSearchParams(params).toString();
     return request(`/admin/orders${q ? "?" + q : ""}`);
   },
+  get: (id) => request(`/admin/orders/${id}`),
   updateStatus: (id, status) =>
     request(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
 };

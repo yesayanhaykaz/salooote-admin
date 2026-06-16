@@ -3,6 +3,7 @@ export const ADMIN_NAV = [
   { label: "Users",          key: "sidebar.users",         href: "/admin/users",             icon: "Users" },
   { label: "Vendors",        key: "sidebar.vendors",       href: "/admin/vendors",           icon: "Store" },
   { label: "Approvals",      key: "sidebar.approvals",     href: "/admin/approvals",         icon: "ClipboardCheck" },
+  { label: "Orders",         key: "sidebar.orders",        href: "/admin/orders",            icon: "ShoppingBag" },
   { label: "Bookings",       key: "sidebar.bookings",      href: "/admin/bookings",          icon: "CalendarCheck" },
   { label: "Products",       key: "sidebar.products",      href: "/admin/products",          icon: "Package" },
   { label: "Reels",                                         href: "/admin/reels",             icon: "Film" },

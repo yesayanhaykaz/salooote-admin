@@ -199,7 +199,7 @@ export default function UsersPage() {
   }, [activeTab, activeRole, page, search]);
 
   // Fetch on tab / page change
-  useEffect(() => { fetchUsers(); }, [activeTab, page]);
+  useEffect(() => { fetchUsers(); }, [activeTab, activeRole, page]);
 
   // Debounce search
   useEffect(() => {
