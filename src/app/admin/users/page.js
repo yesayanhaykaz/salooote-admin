@@ -157,6 +157,12 @@ export default function UsersPage() {
     { value: "banned",    label: t("users.status_banned") },
   ];
 
+  const ROLE_TABS = [
+    { value: "all",    label: "All Roles" },
+    { value: "user",   label: "Normal Users" },
+    { value: "vendor", label: "Vendors" },
+  ];
+
   const COLUMNS = [
     t("users.col_user"),
     t("users.col_role"),
@@ -166,6 +172,7 @@ export default function UsersPage() {
   ];
 
   const [activeTab,    setActiveTab]    = useState("all");
+  const [activeRole,   setActiveRole]   = useState("all");
   const [search,       setSearch]       = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [users,        setUsers]        = useState([]);
@@ -179,6 +186,7 @@ export default function UsersPage() {
     try {
       const params = { limit: LIMIT, page };
       if (activeTab !== "all") params.status = activeTab;
+      if (activeRole !== "all") params.role = activeRole;
       if (search.trim())       params.search = search.trim();
       const res = await adminUsersAPI.list(params);
       setUsers(res.data || []);
@@ -188,7 +196,7 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, search]);
+  }, [activeTab, activeRole, page, search]);
 
   // Fetch on tab / page change
   useEffect(() => { fetchUsers(); }, [activeTab, page]);
@@ -199,8 +207,8 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Reset page when tab changes
-  useEffect(() => { setPage(1); }, [activeTab]);
+  // Reset page when tab/role changes
+  useEffect(() => { setPage(1); }, [activeTab, activeRole]);
 
   const handleStatusChange = async (id, status) => {
     try {
@@ -252,6 +260,20 @@ export default function UsersPage() {
                 onClick={() => setActiveTab(tab.value)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                   activeTab === tab.value ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-5 bg-surface-200" />
+          <div className="flex items-center gap-1 flex-wrap">
+            {ROLE_TABS.map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveRole(tab.value)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  activeRole === tab.value ? "bg-purple-600 text-white" : "text-surface-500 hover:bg-surface-100"
                 }`}
               >
                 {tab.label}

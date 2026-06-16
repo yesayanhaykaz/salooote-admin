@@ -124,6 +124,16 @@ export const adminVendorsAPI = {
     }),
 };
 
+// Admin - Orders
+export const adminOrdersAPI = {
+  list: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/admin/orders${q ? "?" + q : ""}`);
+  },
+  updateStatus: (id, status) =>
+    request(`/admin/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
+};
+
 // Admin - Bookings
 export const adminBookingsAPI = {
   list: (params = {}) => {
