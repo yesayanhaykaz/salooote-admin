@@ -10,7 +10,7 @@ import TopBar from "@/components/TopBar";
 import DataTable from "@/components/DataTable";
 import ImageManager from "@/components/ImageManager";
 import RichTextEditor from "@/components/RichTextEditor";
-import { vendorAPI, adminCategoriesAPI, uploadAPI } from "@/lib/api";
+import { vendorAPI, uploadAPI } from "@/lib/api";
 import { useLocale } from "@/lib/i18n";
 
 /* ─── locale-aware name helper ───────────────────────────────────────────── */

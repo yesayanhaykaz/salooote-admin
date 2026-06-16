@@ -9,7 +9,7 @@ import {
 import TopBar from "@/components/TopBar";
 import ImageManager from "@/components/ImageManager";
 import RichTextEditor from "@/components/RichTextEditor";
-import { vendorAPI, adminCategoriesAPI } from "@/lib/api";
+import { vendorAPI } from "@/lib/api";
 import { useLocale } from "@/lib/i18n";
 
 /* ─── locale-aware name helper ───────────────────────────────────────────── */
@@ -563,7 +563,7 @@ export default function VendorServices() {
   useEffect(() => {
     const editId = searchParams?.get("edit");
     fetchServices().then(() => { if (editId) openEdit(editId); });
-    adminCategoriesAPI.list().then(res => setCategories(res?.data || [])).catch(() => {});
+    vendorAPI.allCategories().then(res => setCategories(res?.data || [])).catch(() => {});
   }, [locale]);
 
   const handleCreate   = async (data) => { const res = await vendorAPI.createService(data); fetchServices(); return res; };

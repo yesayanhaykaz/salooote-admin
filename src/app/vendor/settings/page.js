@@ -594,7 +594,7 @@ function CategoriesTab() {
         <h3 className="text-sm font-semibold text-surface-900 mb-1">{t("settings.business_categories")}</h3>
         <p className="text-xs text-surface-400">{t("settings.categories_text")}</p>
       </div>
-      <CategoryPicker selected={selectedIds} onChange={setSelectedIds} />
+      <CategoryPicker selected={selectedIds} onChange={setSelectedIds} role="vendor" />
       <div className="flex justify-end pt-2">
         <SaveBtn onClick={handle} saving={saving} saved={saved} t={t} />
       </div>

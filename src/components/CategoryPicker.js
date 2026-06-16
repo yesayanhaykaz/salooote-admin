@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Check, Search, Tag, X } from "lucide-react";
-import { adminCategoriesAPI } from "@/lib/api";
+import { adminCategoriesAPI, vendorAPI } from "@/lib/api";
 
 /**
  * CategoryPicker
@@ -10,21 +10,36 @@ import { adminCategoriesAPI } from "@/lib/api";
  *   selected   — string[]  array of selected category IDs
  *   onChange   — (ids: string[]) => void
  *   disabled   — boolean (optional)
+ *   role       — "admin" (default) | "vendor"  — determines which API to call
  */
-export default function CategoryPicker({ selected = [], onChange, disabled = false }) {
+export default function CategoryPicker({ selected = [], onChange, disabled = false, role = "admin" }) {
   const [allCats, setAllCats]   = useState([]);
   const [search, setSearch]     = useState("");
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    adminCategoriesAPI.list()
-      .then(res => {
-        const flat = flattenCategories(res?.data || []);
-        setAllCats(flat);
-      })
+    const fetchFn = role === "vendor"
+      ? () => vendorAPI.allCategories().then(res => {
+          const flat = res?.data || [];
+          // Build depth from parent_id so indentation works
+          const depthMap = {};
+          flat.forEach(c => { depthMap[c.id] = 0; });
+          flat.forEach(c => {
+            if (c.parent_id && depthMap[c.parent_id] != null) {
+              depthMap[c.id] = depthMap[c.parent_id] + 1;
+            }
+          });
+          return { data: flat.map(c => ({ ...c, depth: depthMap[c.id] || 0 })) };
+        })
+      : () => adminCategoriesAPI.list().then(res => ({
+          data: flattenCategories(res?.data || []),
+        }));
+
+    fetchFn()
+      .then(res => setAllCats(res?.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [role]);
 
   function flattenCategories(cats, depth = 0) {
     const result = [];
