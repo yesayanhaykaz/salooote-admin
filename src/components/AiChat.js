@@ -270,7 +270,8 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
       const history = newMessages.map(m => ({ role: m.role, content: m.content }));
       const chatFn = role === "vendor" ? aiAPI.vendorChat : aiAPI.adminChat;
       const res = await chatFn(history);
-      const { message, action } = res?.data || {};
+      // Support both wrapped { data: { message, action } } and flat { message, action } responses
+      const { message, action } = res?.data || res || {};
 
       let finalAction = action ? { ...action, data: { ...action.data } } : null;
 
@@ -298,10 +299,10 @@ export function ChatInterface({ role = "vendor", compact = true, onClose }) {
         content: message || "Something went wrong. Please try again.",
         action: finalAction,
       }]);
-    } catch {
+    } catch (err) {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "Sorry, I couldn't process that. Please check your connection and try again.",
+        content: err?.message || "Sorry, I couldn't process that. Please check your connection and try again.",
       }]);
     } finally {
       setLoading(false);
