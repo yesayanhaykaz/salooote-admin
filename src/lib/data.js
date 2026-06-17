@@ -26,7 +26,6 @@ export const ADMIN_NAV = [
 export const VENDOR_NAV = [
   { label: "Dashboard",     key: "sidebar.dashboard",     href: "/vendor",               icon: "LayoutDashboard" },
   { label: "AI Assistant",  key: "sidebar.ai_assistant",  href: "/vendor/ai",            icon: "Sparkles" },
-  { label: "Inquiries",     key: "sidebar.inquiries",     href: "/vendor/inquiries",     icon: "Inbox" },
   { label: "Orders",        key: "sidebar.orders",        href: "/vendor/orders",        icon: "ShoppingBag" },
   { label: "Calendar",      key: "sidebar.calendar",      href: "/vendor/calendar",      icon: "CalendarDays" },
   { label: "Products",      key: "sidebar.products",      href: "/vendor/products",      icon: "Package" },
