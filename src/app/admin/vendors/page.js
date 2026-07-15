@@ -713,7 +713,11 @@ export default function VendorsPage() {
     try {
       await adminVendorsAPI.updateStatus(id, status);
       setVendors(prev => prev.map(v => v.id === id ? { ...v, status } : v));
-    } catch (e) { console.error(e); }
+      setToast({ message: `Vendor ${status === "active" ? "activated" : status}.`, type: "success" });
+    } catch (e) {
+      console.error(e);
+      setToast({ message: e.message || "Failed to update vendor status.", type: "error" });
+    }
   };
 
   const countByStatus = (s) => vendors.filter(v => v.status === s).length;
