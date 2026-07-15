@@ -669,7 +669,7 @@ export default function VendorsPage() {
   const fetchVendors = async () => {
     setLoading(true);
     try {
-      const params = { limit: 100 };
+      const params = { limit: 500 }; // backend pagination cap
       if (activeTab !== "All") params.status = activeTab.toLowerCase();
       if (search) params.search = search;
       if (categoryFilter) params.category_id = categoryFilter;
