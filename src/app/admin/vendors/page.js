@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import CategoryPicker from "@/components/CategoryPicker";
-import { adminVendorsAPI, uploadAPI, aiAPI } from "@/lib/api";
+import { adminVendorsAPI, adminCategoriesAPI, uploadAPI, aiAPI } from "@/lib/api";
 
 const STATUS_TABS = ["All", "Active", "Pending", "Suspended"];
 
@@ -90,6 +90,21 @@ function VendorField({ label, name, value, onChange, type = "text", placeholder,
         placeholder={placeholder}
         className="w-full px-3.5 py-2.5 rounded-xl border border-surface-200 text-sm text-surface-800 placeholder:text-surface-400 focus:border-primary-500 outline-none transition-colors"
       />
+    </div>
+  );
+}
+
+/* ── Vendor logo avatar: real logo if set, otherwise initial letter ── */
+function VendorLogo({ vendor, sizeClass = "w-10 h-10", textClass = "text-sm", roundedClass = "rounded-xl", className = "" }) {
+  const [failed, setFailed] = useState(false);
+  const logo = vendor.logo_url || vendor.owner_photo_url;
+  return (
+    <div className={`${sizeClass} ${roundedClass} bg-primary-100 flex items-center justify-center overflow-hidden flex-shrink-0 ${className}`}>
+      {logo && !failed ? (
+        <img src={logo} alt="" className="w-full h-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <span className={`${textClass} font-bold text-primary-600`}>{(vendor.business_name || vendor.name || "?").charAt(0)}</span>
+      )}
     </div>
   );
 }
@@ -554,9 +569,7 @@ function VendorDetailPanel({ vendor, onClose, onStatusChange, onEdit }) {
 
       <div className="px-6 py-5 border-b border-surface-100">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl font-bold text-primary-600">{(vendor.business_name || vendor.name || "?").charAt(0)}</span>
-          </div>
+          <VendorLogo vendor={vendor} sizeClass="w-16 h-16" textClass="text-2xl" roundedClass="rounded-2xl" />
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-surface-900">{vendor.business_name || vendor.name}</h3>
@@ -639,6 +652,11 @@ function VendorDetailPanel({ vendor, onClose, onStatusChange, onEdit }) {
 export default function VendorsPage() {
   const [activeTab, setActiveTab] = useState("All");
   const [search, setSearch] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [addressFilter, setAddressFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editVendor, setEditVendor] = useState(null);
@@ -654,6 +672,10 @@ export default function VendorsPage() {
       const params = { limit: 100 };
       if (activeTab !== "All") params.status = activeTab.toLowerCase();
       if (search) params.search = search;
+      if (categoryFilter) params.category_id = categoryFilter;
+      if (addressFilter) params.address = addressFilter;
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
       const res = await adminVendorsAPI.list(params);
       setVendors(res?.data || []);
     } catch (e) {
@@ -663,11 +685,17 @@ export default function VendorsPage() {
     }
   };
 
-  useEffect(() => { fetchVendors(); }, [activeTab]);
+  useEffect(() => { fetchVendors(); }, [activeTab, categoryFilter, dateFrom, dateTo]);
   useEffect(() => {
     const t = setTimeout(() => fetchVendors(), 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, addressFilter]);
+
+  useEffect(() => {
+    adminCategoriesAPI.list()
+      .then(res => setCategories(res?.data || []))
+      .catch(console.error);
+  }, []);
 
   const handleCreate = async (form) => {
     const res = await adminVendorsAPI.create(form);
@@ -737,24 +765,64 @@ export default function VendorsPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="bg-white rounded-xl border border-surface-200 px-5 py-3.5 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1">
-            {STATUS_TABS.map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border-0 cursor-pointer ${activeTab === tab ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100 bg-transparent"}`}>
-                {tab}
+        <div className="bg-white rounded-xl border border-surface-200 px-5 py-3.5 space-y-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1">
+              {STATUS_TABS.map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border-0 cursor-pointer ${activeTab === tab ? "bg-primary-600 text-white" : "text-surface-500 hover:bg-surface-100 bg-transparent"}`}>
+                  {tab}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 w-[220px] gap-2 focus-within:border-primary-400 transition-colors">
+              <svg className="w-3.5 h-3.5 text-surface-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
+                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400" />
+            </div>
+            <span className="text-xs text-surface-400">{vendors.length} results</span>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-surface-100">
+            <div className="flex items-center gap-1.5">
+              <Tag size={13} className="text-surface-400" />
+              <select
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+                className="px-3 py-2 rounded-lg border border-surface-200 bg-surface-50 text-xs font-medium text-surface-700 outline-none focus:border-primary-400 cursor-pointer max-w-[200px]"
+              >
+                <option value="">All categories</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.emoji ? `${c.emoji} ` : ""}{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 w-[200px] gap-2 focus-within:border-primary-400 transition-colors">
+              <MapPin size={13} className="text-surface-400 flex-shrink-0" />
+              <input value={addressFilter} onChange={e => setAddressFilter(e.target.value)} placeholder="City or address…"
+                className="flex-1 bg-transparent border-none outline-none text-xs placeholder:text-surface-400 min-w-0" />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={13} className="text-surface-400" />
+              <span className="text-xs text-surface-400">Registered</span>
+              <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg border border-surface-200 bg-surface-50 text-xs text-surface-700 outline-none focus:border-primary-400 cursor-pointer" />
+              <span className="text-xs text-surface-400">—</span>
+              <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg border border-surface-200 bg-surface-50 text-xs text-surface-700 outline-none focus:border-primary-400 cursor-pointer" />
+            </div>
+            {(categoryFilter || addressFilter || dateFrom || dateTo) && (
+              <button
+                onClick={() => { setCategoryFilter(""); setAddressFilter(""); setDateFrom(""); setDateTo(""); }}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-surface-500 hover:bg-surface-100 bg-transparent border-0 cursor-pointer"
+              >
+                <X size={12} /> Clear filters
               </button>
-            ))}
+            )}
           </div>
-          <div className="flex-1" />
-          <div className="flex items-center bg-surface-50 rounded-lg px-3 py-2 border border-surface-200 w-[220px] gap-2 focus-within:border-primary-400 transition-colors">
-            <svg className="w-3.5 h-3.5 text-surface-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-            </svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors…"
-              className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-surface-400" />
-          </div>
-          <span className="text-xs text-surface-400">{vendors.length} results</span>
         </div>
 
         {/* Grid */}
@@ -764,11 +832,13 @@ export default function VendorsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
             {vendors.map(v => (
               <div key={v.id} className={`bg-white rounded-xl border overflow-hidden transition-all ${selectedVendor?.id === v.id ? "border-primary-300 ring-2 ring-primary-100" : "border-surface-200 hover:border-surface-300"}`}>
-                <div className="h-14 bg-gradient-to-r from-surface-100 to-surface-50" />
+                {v.banner_url ? (
+                  <img src={v.banner_url} alt="" className="h-14 w-full object-cover" />
+                ) : (
+                  <div className="h-14 bg-gradient-to-r from-surface-100 to-surface-50" />
+                )}
                 <div className="px-4 pb-4 -mt-5">
-                  <div className="w-10 h-10 rounded-xl bg-primary-100 border-2 border-white flex items-center justify-center shadow-sm mb-2">
-                    <span className="text-sm font-bold text-primary-600">{(v.business_name || v.name || "?").charAt(0)}</span>
-                  </div>
+                  <VendorLogo vendor={v} className="border-2 border-white shadow-sm mb-2" />
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div>
                       <h3 className="text-sm font-bold text-surface-900 leading-tight">{v.business_name || v.name}</h3>
@@ -778,7 +848,8 @@ export default function VendorsPage() {
                   </div>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <PlanBadge plan={v.subscription_plan || v.plan} />
-                    {v.city && <span className="flex items-center gap-1 text-xs text-surface-400"><MapPin size={11} />{v.city}</span>}
+                    {(v.city || v.address) && <span className="flex items-center gap-1 text-xs text-surface-400"><MapPin size={11} />{[v.city, v.address].filter(Boolean).join(", ")}</span>}
+                    {v.created_at && <span className="flex items-center gap-1 text-xs text-surface-400"><Calendar size={11} />{new Date(v.created_at).toLocaleDateString()}</span>}
                   </div>
                   <StarRating rating={v.rating || v.avg_rating} />
                   <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
